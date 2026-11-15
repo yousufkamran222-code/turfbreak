@@ -16,7 +16,13 @@
 - `npm run check` passes locally: lint, typecheck, 21 tests (PRNG golden sequence and stream separation, dot stays in bounds and is deterministic, stepper maths, save fallback on 9 corrupt inputs, back-handler order).
 - Built the web target and loaded it in headless Chromium at 390x844 and 1280x720: renders, no console errors, tap works, launch counter goes 1 → 2 across a reload.
 - Size: 8.6 KB total, 3.6 KB JS gzipped.
-- Android: not built locally (no Android SDK in the cloud session). CI status is recorded below.
+- Android: not built locally (no Android SDK in the cloud session). CI is the check.
+- CI on `main` at fd167e0: `ci.yml`, `web.yml` and `android.yml` all green. The Pages site returns the built page (HTTP 200). The `latest` pre-release holds `turfbreak-debug-fd167e0.apk` (4.1 MB) and `turfbreak-crazygames-fd167e0.zip` (4.8 KB).
+- Not yet verified: installing the APK on a phone, and a second APK installing over the first. These need Yousuf's phone.
+
+### Links
+- Web: https://yousufkamran222-code.github.io/turfbreak/
+- APK and portal zip: https://github.com/yousufkamran222-code/turfbreak/releases/tag/latest
 
 ### Known issues and stubs
 - `npm audit` reports 7 moderate advisories, all inside the typescript-eslint dev toolchain. Nothing ships to players.
