@@ -107,6 +107,11 @@ export class Synth {
     this.tone(990, 0.1, 'sine', 0.1, 0.05);
   }
 
+  pickup(blast: boolean): void {
+    [76, 81, 88].forEach((n, i) => this.tone(midiToHz(n), 0.16, 'triangle', 0.14, i * 0.05));
+    if (blast) this.tone(70, 0.35, 'sawtooth', 0.12);
+  }
+
   urgentTick(): void {
     this.tone(1200, 0.05, 'square', 0.06);
   }

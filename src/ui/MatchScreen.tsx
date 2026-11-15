@@ -47,7 +47,7 @@ export function MatchScreen(props: Props) {
     ro.observe(box);
     fit();
 
-    // Arena input: a press redirects (or starts a boost); a release ends a boost.
+    // Arena input: a press redirects.
     const toArena = (e: PointerEvent): [number, number] => {
       const rect = canvas.getBoundingClientRect();
       const size = s.world.arena.size;
@@ -59,10 +59,7 @@ export function MatchScreen(props: Props) {
       const [x, y] = toArena(e);
       s.press(x, y);
     };
-    const up = (): void => s.release();
     canvas.addEventListener('pointerdown', down);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
 
     s.start();
     platform.gameplayStart();
@@ -76,8 +73,6 @@ export function MatchScreen(props: Props) {
       s.stop();
       ro.disconnect();
       canvas.removeEventListener('pointerdown', down);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       offPause();
       offResume();
       offBack();
@@ -93,7 +88,7 @@ export function MatchScreen(props: Props) {
   const gauge = hud?.gauge.value ?? 1;
   const ready = hud?.gaugeReady.value ?? true;
   const gaugeLabel =
-    variant.mode === 'redirect' ? (ready ? 'REDIRECT READY' : 'RECHARGING') : variant.mode === 'boost' ? 'BOOST' : '';
+    variant.mode === 'redirect' ? (ready ? 'REDIRECT READY' : 'RECHARGING') : '';
 
   return (
     <main class="match" style={{ '--side-a': looks[0].color, '--side-b': looks[1].color }}>

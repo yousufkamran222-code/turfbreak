@@ -3,6 +3,7 @@ import { cooldownSteps } from '../sim/input';
 import { beamLength } from '../sim/step';
 import { statValue, type World } from '../sim/world';
 import type { Juice } from './juice';
+import { tuning } from '../content/tuning';
 import { mix, rgba } from './colors';
 
 export const BACKGROUND = '#0b0d12';
@@ -180,9 +181,11 @@ export class ArenaRenderer {
       c.lineWidth = 9;
       c.stroke();
     }
-    juice.drawParticles(c, [this.palettes[0].beam, this.palettes[1].beam]);
+    const pickupColors = world.pickupDefs.map((d) => d.color);
+    juice.drawParticles(c, [this.palettes[0].beam, this.palettes[1].beam, ...pickupColors]);
     c.globalCompositeOperation = 'source-over';
-    juice.drawTaps(c, [this.palettes[0].core, this.palettes[1].core], now);
+    juice.drawRings(c, [this.palettes[0].core, this.palettes[1].core, ...pickupColors], now);
+    this.drawPickups(world, now);
 
     this.drawInputRing(world, prevX, prevY, alpha, now, unit);
 
@@ -214,24 +217,47 @@ export class ArenaRenderer {
     }
   }
 
-  /** The player's (side 0) redirect cooldown or boost meter, as a ring around their primary. */
+  /** Pickup orbs: a glow, a solid core with the kind's glyph, and a blink before they expire. */
+  private drawPickups(world: World, now: number): void {
+    const c = this.ctx;
+    const r = tuning.pickups.radius;
+    for (const p of world.pickups) {
+      const def = world.pickupDefs[p.def]!;
+      const left = (p.expiresStep - world.step) / tuning.sim.stepsPerSecond;
+      if (left < 2 && Math.floor(now * 8) % 2 === 0) continue;
+      const pulse = 1 + 0.08 * Math.sin(now * 6 + p.id);
+      c.globalCompositeOperation = 'lighter';
+      c.fillStyle = rgba(def.color, 0.25);
+      c.beginPath();
+      c.arc(p.x, p.y, r * 1.8 * pulse, 0, Math.PI * 2);
+      c.fill();
+      c.globalCompositeOperation = 'source-over';
+      c.fillStyle = def.color;
+      c.beginPath();
+      c.arc(p.x, p.y, r * pulse, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 3;
+      c.stroke();
+      c.fillStyle = '#0b0d12';
+      c.font = `900 ${Math.round(r * 1.3)}px system-ui, sans-serif`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(def.glyph, p.x, p.y + 1);
+    }
+  }
+
+  /** The player's (side 0) redirect cooldown, as a ring around their primary. */
   private drawInputRing(world: World, prevX: Float64Array, prevY: Float64Array, alpha: number, now: number, unit: number): void {
-    if (world.inputMode === 'none') return;
+    if (world.inputMode !== 'redirect') return;
     const i = world.runners.findIndex((r) => r.side === 0 && r.primary);
     if (i < 0) return;
     const r = world.runners[i]!;
     const st = world.sides[0];
     const x = lerp(prevX[i]!, r.x, alpha);
     const y = lerp(prevY[i]!, r.y, alpha);
-    let fill: number;
-    let ready: boolean;
-    if (world.inputMode === 'redirect') {
-      ready = st.charges > 0;
-      fill = ready ? 1 : 1 - st.chargeSteps / cooldownSteps(world);
-    } else {
-      fill = st.boostMeter;
-      ready = fill > 0.4;
-    }
+    const ready = st.charges > 0;
+    const fill = ready ? 1 : 1 - st.chargeSteps / cooldownSteps(world);
     const c = this.ctx;
     const rad = statValue(st, 'bodyRadius') * 1.7 + 14;
     c.lineCap = 'round';

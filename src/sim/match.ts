@@ -14,6 +14,7 @@ export interface MatchResult {
   runners: [number, number];
   hits: [number, number];
   redirects: [number, number];
+  pickups: [number, number];
 }
 
 export function summarize(world: World): MatchResult {
@@ -30,6 +31,7 @@ export function summarize(world: World): MatchResult {
     runners: [world.sides[0].runnerCount, world.sides[1].runnerCount],
     hits: [world.sides[0].hits, world.sides[1].hits],
     redirects: [world.sides[0].redirects, world.sides[1].redirects],
+    pickups: [world.sides[0].pickups, world.sides[1].pickups],
   };
 }
 

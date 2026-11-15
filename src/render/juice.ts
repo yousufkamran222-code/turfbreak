@@ -19,14 +19,15 @@ export class Juice {
   private readonly vy = new Float32Array(J.maxParticles);
   private readonly life = new Float32Array(J.maxParticles);
   private readonly maxLife = new Float32Array(J.maxParticles);
-  private readonly side = new Uint8Array(J.maxParticles);
+  /** Colour slot: 0 and 1 are the sides, 2 and up are pickup kinds. */
+  private readonly color = new Uint8Array(J.maxParticles);
   private next = 0;
   private trauma = 0;
   private readonly rng: Rng;
   private batch = 0;
   hitStop = 0;
-  /** Tap markers: x, y, start time, side. */
-  readonly taps: { x: number; y: number; t: number; side: number }[] = [];
+  /** Expanding rings: tap markers, pickup spawns and blasts. `color` is a colour slot. */
+  readonly rings: { x: number; y: number; t: number; color: number; from: number; to: number; dur: number }[] = [];
   readonly shake = { x: 0, y: 0 };
 
   constructor(cellCount: number, seed: number) {
@@ -69,15 +70,28 @@ export class Juice {
         break;
       }
       case 'Redirect':
-        this.taps.push({ x: ev.x, y: ev.y, t: now, side: ev.side });
+        this.rings.push({ x: ev.x, y: ev.y, t: now, color: ev.side, from: 18, to: 58, dur: J.tapMarkerSeconds });
         break;
+      case 'PickupSpawned': {
+        const slot = 2 + world.pickupDefs.findIndex((d) => d.id === ev.kind);
+        this.rings.push({ x: ev.x, y: ev.y, t: now, color: slot, from: 90, to: 20, dur: 0.35 });
+        break;
+      }
+      case 'PickupCollected': {
+        const def = world.pickupDefs.findIndex((d) => d.id === ev.kind);
+        const e = world.pickupDefs[def]?.effect;
+        this.sparks(ev.x, ev.y, 2 + def, Math.round(18 * k), 420);
+        this.rings.push({ x: ev.x, y: ev.y, t: now, color: 2 + def, from: 20, to: e?.kind === 'blast' ? e.radius : 80, dur: 0.4 });
+        this.trauma += (e?.kind === 'blast' ? J.traumaClash : J.traumaTrigger) * k;
+        break;
+      }
       default:
         break;
     }
     this.trauma = Math.min(1, this.trauma);
   }
 
-  private sparks(x: number, y: number, side: number, n: number, speed: number): void {
+  private sparks(x: number, y: number, color: number, n: number, speed: number): void {
     for (let i = 0; i < n; i++) {
       const p = this.next;
       this.next = (this.next + 1) % J.maxParticles;
@@ -89,7 +103,7 @@ export class Juice {
       this.vy[p] = dir.y * v;
       this.maxLife[p] = 0.25 + this.rng.next() * 0.3;
       this.life[p] = this.maxLife[p]!;
-      this.side[p] = side;
+      this.color[p] = color;
     }
   }
 
@@ -108,7 +122,7 @@ export class Juice {
       this.vx[i]! *= drag;
       this.vy[i]! *= drag;
     }
-    while (this.taps.length > 0 && now - this.taps[0]!.t > J.tapMarkerSeconds) this.taps.shift();
+    for (let i = this.rings.length - 1; i >= 0; i--) if (now - this.rings[i]!.t > this.rings[i]!.dur) this.rings.splice(i, 1);
   }
 
   drawPops(c: CanvasRenderingContext2D, world: World, paths: Path2D[], now: number): void {
@@ -136,14 +150,14 @@ export class Juice {
     }
   }
 
-  drawParticles(c: CanvasRenderingContext2D, colors: readonly [string, string]): void {
+  drawParticles(c: CanvasRenderingContext2D, colors: readonly string[]): void {
     c.lineCap = 'round';
-    for (const s of [0, 1]) {
+    for (let s = 0; s < colors.length; s++) {
       c.strokeStyle = colors[s]!;
       c.lineWidth = 4;
       c.beginPath();
       for (let i = 0; i < J.maxParticles; i++) {
-        if (this.life[i]! <= 0 || this.side[i] !== s) continue;
+        if (this.life[i]! <= 0 || this.color[i] !== s) continue;
         const f = 0.035;
         c.moveTo(this.px[i]!, this.py[i]!);
         c.lineTo(this.px[i]! - this.vx[i]! * f, this.py[i]! - this.vy[i]! * f);
@@ -152,14 +166,14 @@ export class Juice {
     }
   }
 
-  drawTaps(c: CanvasRenderingContext2D, colors: readonly [string, string], now: number): void {
-    for (const tap of this.taps) {
-      const t = (now - tap.t) / J.tapMarkerSeconds;
-      c.strokeStyle = colors[tap.side]!;
+  drawRings(c: CanvasRenderingContext2D, colors: readonly string[], now: number): void {
+    for (const ring of this.rings) {
+      const t = Math.min(1, (now - ring.t) / ring.dur);
+      c.strokeStyle = colors[ring.color] ?? '#ffffff';
       c.globalAlpha = 1 - t;
-      c.lineWidth = 4;
+      c.lineWidth = 5;
       c.beginPath();
-      c.arc(tap.x, tap.y, 18 + 40 * t, 0, Math.PI * 2);
+      c.arc(ring.x, ring.y, ring.from + (ring.to - ring.from) * t, 0, Math.PI * 2);
       c.stroke();
     }
     c.globalAlpha = 1;

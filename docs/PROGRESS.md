@@ -2,67 +2,63 @@
 
 ## Phase 2: agency (fun gate, 2026-11-15)
 
-**Status: waiting for Yousuf's input choice.** Phase 3 must not start until he has played at least 20 matches across the variants and chosen one, or rejected them all.
+**Status: second play test.** After the first test Yousuf chose Redirect (5 s) and asked for less randomness and in-match upgrades. Both are built. The gate stays open until he has played this build; Phase 3 must not start before then.
 
 ### Done
-- **Feedback fixes.** Rematch now remounts the match: every match gets a fresh key, where Phase 1 keyed by Cores and seed, so a same-seed rematch did nothing. The setup screen starts on a random seed, and "New seed" picks a random one. Phase 1 always opened on seed 1, which Ricochet wins; that, plus the broken Rematch, explains "Ricochet always wins". The lab shows 50.4% from side A and 49.2% from side B over 1,000 seeds.
-- **Input in the sim.** Timestamped input records, an applied-input log, replays from seed, Cores and log (tested to the same hash), redirect charges and cooldown, an `onRedirect` hook, and a redirect-as-hit option.
-- **Four input variants** behind the debug switch on the setup screen: Redirect (5 s), Redirect+ (3 s, counts as a hit), Hold to boost, No input. The rival uses the same input when "Rival uses the input too" is on. "Assist" lets the game play your input with a deliberately mediocre heuristic.
-- **Controllers.** A rival heuristic (bouncing 1,100-unit ray, 16 headings, reaction delay, aim error, separate PRNG stream per side), a random-aim baseline and a boost controller.
-- **Tension tools.** Underdog boost (6% max); overtime surge built, measured and removed; lead changes with 3-cell hysteresis.
-- **Juice.** Staggered capture pops, pooled sparks, trauma shake, hit-stop on primary clashes, a tap marker, and a pulsing cooldown ring around your runner. A cooldown or meter bar sits under the arena. "Tap to redirect" / "Hold to boost" appears at 5 s until first use, and the territory bar thumps on lead changes.
-- **Audio** (WebAudio, no files): per-side pentatonic hit notes that climb, capture ticks, clash, trigger and redirect sounds, a final-10 s tick, a win/lose stinger, a mute toggle, and suspend on pause.
-- **1x/2x speed toggle.**
-- **Lab:** `--control`, `--variant`, `--redirect-value` (none, random-aim and heuristic on the same seeds) and `--tension` (underdog on and off). CI's 200-match smoke test now runs with both rivals redirecting.
+- **Feedback fixes (round 1).** Rematch remounts the match. The setup screen starts on a random seed. Phase 1 always opened on seed 1 (a Ricochet win), which with the broken Rematch explains "Ricochet always wins". The lab shows 50.4% from side A and 49.2% from side B.
+- **Input in the sim.** Timestamped redirect records, an applied-input log, replays from seed, Cores and log (tested to the same hash), charges and cooldown, an `onRedirect` hook, and per-match redirect rules for future Mods.
+- **Input choice.** Redirect (5 s) is the input. Redirect+ and Hold to boost were tried and removed (see DECISIONS). No input stays on the debug switch for watching. Assist plays your redirect with a mediocre heuristic.
+- **Feedback changes (round 2):**
+  - **Ricochet's beam** sweeps only after a redirect; bounces snap it.
+  - **Four pickups:** Surge, Blast, Charge and Shield. They spawn from the seed and only main runners grab them. They show as pulsing orbs with glyphs, a spawn ring, a collect burst, a Blast shockwave, effect chips under each name, and a sound.
+- **Rival controller.** Bouncing 1,100-unit ray, sweep scoring for beams, pickup racing, reaction delay, aim error, a separate PRNG stream per side.
+- **Tension.** Underdog boost (6% max); overtime surge measured and removed; lead changes with 3-cell hysteresis.
+- **Juice and audio.**
+  - Visual: staggered capture pops, pooled sparks, shake, hit-stop, rings for taps, spawns and blasts, a pulsing cooldown ring, a gauge bar, the "Tap to redirect" prompt at 5 s, and a territory-bar thump on lead changes.
+  - Audio: synthesised hit runs, ticks, clash, trigger, redirect and pickup sounds, a final-10 s tick, stingers, and a mute toggle.
+  - Speed: 1x/2x.
+- **Lab.** `--control`, `--variant`, `--redirect-value`, `--tension`, and pickup stats (mean pickups; whether the side with more pickups wins). CI's smoke test runs both rivals redirecting.
 
 ### How it was verified
-- `npm run check`: 53 tests pass. New tests cover:
-  - redirect turn, charge and cooldown; ignored in other modes; counts as a hit when set
-  - boost meter drain and refill
-  - underdog boost capped and applied only to the trailing side
-  - replays from the input log, both controller-recorded and queued live
-  - the rival respects its cooldown
-  - lead hysteresis
+- **Tests:** `npm run check` passes all 61. New tests cover:
+  - redirect, cooldown, replays from the log, rival cooldown, underdog cap, lead hysteresis
+  - the beam snaps on a bounce and swings only after a redirect
+  - pickups spawn on schedule, cap at 2, are identical per seed and can be switched off
+  - each pickup's effect (Surge speed, Blast radius, Charge refill, Shield blocking captures)
 - **Headless Chromium at 390×844:**
-  - the prompt appears at 5 s
-  - a tap redirects and the gauge switches to RECHARGING
-  - 2x works
-  - the match ends, and Rematch restarts at 40 s
+  - the prompt appears, a tap redirects, and the gauge recharges
+  - pickups show on the map; a rival grab shows its SURGE chip
+  - 2x works, and Rematch restarts
   - no console errors
-  - screenshots reviewed: setup, prompt, after the tap, mid-match, result
-- **Lab reports** in `docs/balance/phase2-*.md`, 300 seeds each (core matrix 1,000):
-
-  | Variant | Value vs no input (R mirror / R vs S / S mirror) | Aim value (heuristic vs random) | R vs S when both use it | Decided early |
-  | --- | --- | --- | --- | --- |
-  | Redirect (5 s) | +2.7 / +6.5 / +0.2 | about 0 | 48.8% | 15.8% |
-  | Redirect+ (3 s, hit) | +14.0 / +15.2 / +37.5 | +1 to +3 | 28.5% | 52% |
-  | Hold to boost | +9.3 / +12.2 / +45.7 | n/a | – | – |
-
-  Target value: +10 to +20.
-
-  Core matrix, both sides redirecting with the rival heuristic (1,000 seeds):
+- **Lab** (`docs/balance/phase2-core-matrix.md`, 1,000 seeds, both sides on the rival heuristic):
 
   | Pairing | Result | Target |
   | --- | --- | --- |
-  | Ricochet vs Splitter | Ricochet wins 50.3% | 40–60% |
-  | Ricochet mirror | Side 0 wins 47.3% | 48–52% |
-  | Splitter mirror | Side 0 wins 50.2% | 48–52% |
+  | Ricochet vs Splitter | Ricochet wins 49.9% | 40–60% |
+  | Ricochet mirror | Side 0 wins 49.5% | 48–52% |
+  | Splitter mirror | Side 0 wins 47.8% | 48–52% |
 
-  Ricochet vs Splitter, other metrics: decided early 15.0% (target under 15%), lead changes 7.6.
+  Ricochet vs Splitter, other metrics: decided early 6.1%, lead changes 8.0.
+- **Redirect value** (`docs/balance/phase2-redirect.md`, 300 seeds, against a side with no input):
 
-### What the numbers say (for the fun gate)
-- **The brief's redirect has too little effect in the lab:** 0 to 7 points against a target of 10 to 20. Where you aim makes almost no difference to the heuristic: random aim scores about the same. Territory is driven mostly by the Cores (beam sweeps, splits), and one runner's path is a small share of it.
-- **Redirect+ and Boost have big value,** but almost none of it comes from aiming; it comes from pressing at all. Both also favour Splitter heavily (hit counting and speed multiply across its splits). Redirect+ pushes early-decided matches to 52%.
-- **A human may aim better than the heuristic.** For example, a player can intercept the rival to bank a clash, or line up a sharp turn so Ricochet's beam sweeps. That is exactly what the play test decides. If none of the variants feels played, the next step is a new input design, not more tuning (see the options in the session report).
+  | Pairing | Heuristic vs none | Aim value (heuristic vs random) | Target |
+  | --- | --- | --- | --- |
+  | Ricochet vs Ricochet | +49.8 pts | +11 pts | +10 to +20 |
+  | Ricochet vs Splitter | +47.3 pts | +34 pts | +10 to +20 |
+  | Splitter vs Splitter | +3.5 pts | +16 pts | +10 to +20 |
+
+### What the numbers say
+- **Ricochet** is now an input Core. Taps decide its sweeps, and where you aim matters a lot. Its redirect value is well above the brief's +10–20 target; that is a deliberate trade for agency. It also means a Ricochet that never redirects (rival rounds 1–3, No input) almost always loses.
+- **Splitter** still gains little from redirecting (+3.5). Its pickups help (in mirrors the pickup leader wins 62%), but most of its power is in splits, which you can't steer. If Yousuf finds Splitter passive, cheap options are letting splits grab pickups, or a Mod or base rule where a redirect also turns splits.
 
 ### Known issues and stubs
-- Underdog boost and controllers are tuned against the lab heuristic only; real-player numbers come from Yousuf's play.
-- Juice has a single intensity value in `tuning.juice`; the reduce-motion setting is Phase 5.
+- Underdog boost and controllers are tuned against the lab heuristic only.
+- Juice intensity is a single tuning value; reduce-motion is Phase 5.
 - The phone layout still has empty space above the arena (Phase 3 adds Mod slots).
-- Events still allocate one object each (see Phase 1).
+- Events still allocate one object each.
 
 ### Next
-Fun gate. Yousuf plays at least 20 matches across the four variants and picks one, or none. Then Phase 3: the run.
+Fun gate, second round. Yousuf plays this build: is Ricochet less random, do taps matter, are pickups fun, does Splitter feel passive? Then Phase 3: the run.
 
 ## Phase 1: the simulation (2026-11-15)
 

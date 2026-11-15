@@ -1,7 +1,8 @@
 import { tuning } from '../content/tuning';
 import { runControllers } from './ai';
 import { findCell } from './arena';
-import { applyPendingInputs, isBoosting, tickInputState } from './input';
+import { applyPendingInputs, tickInputState } from './input';
+import { updatePickups } from './pickups';
 import type { CaptureCause, EndReason } from './events';
 import { rotateSmall } from './vec';
 import { emit, statValue, type Runner, type SideIndex, type World } from './world';
@@ -10,15 +11,14 @@ function other(side: SideIndex): SideIndex {
   return side === 0 ? 1 : 0;
 }
 
-/** Underdog boost and hold-to-boost, once per step per side. */
+/** Underdog boost, redirect dash and Surge, once per step per side. */
 function updateSpeedFactors(world: World): void {
   const n = world.arena.cellCount;
   for (const s of [0, 1] as const) {
     const deficit = (world.counts[other(s)] - world.counts[s]) / n;
     const underdog = deficit > 0 ? 1 + Math.min(tuning.tension.underdogMax, tuning.tension.underdogPerShare * deficit) : 1;
-    const boost = isBoosting(world, s) ? tuning.input.boostMultiplier : 1;
     const dash = world.sides[s].dashSteps > 0 ? world.redirectRules.dashMul : 1;
-    world.sides[s].speedFactor = underdog * boost * dash;
+    world.sides[s].speedFactor = underdog * dash * world.sides[s].surgeMul;
   }
 }
 
@@ -37,6 +37,8 @@ function endMatch(world: World, winner: SideIndex, reason: EndReason): void {
 function capture(world: World, cell: number, side: SideIndex, cause: CaptureCause): void {
   const prev = world.owner[cell]!;
   if (prev === side || world.phase === 'ended') return;
+  // A Shield pickup makes the owner's cells untakeable for a moment.
+  if ((prev === 0 || prev === 1) && world.sides[prev].shieldSteps > 0) return;
   world.owner[cell] = side;
   world.counts[side]++;
   if (prev === 0 || prev === 1) world.counts[prev]--;
@@ -170,14 +172,19 @@ const swingStep = tuning.beam.swingRate / tuning.sim.stepsPerSecond;
 // cos(swingStep) by Taylor series, so no engine-specific Math.cos result enters the sim.
 const cosSwing = 1 - (swingStep * swingStep) / 2 + swingStep ** 4 / 24;
 
-/** Swing the beam toward the trailing direction (straight behind the runner) at a fixed rate. */
+/**
+ * After a redirect, swing the beam toward straight-behind at a fixed rate, sweeping
+ * cells as it goes. Otherwise (wall bounces, clashes) it snaps straight behind, so
+ * Ricochet's big sweeps come from the player's taps rather than from bounce luck.
+ */
 function swingBeam(r: Runner): void {
   const tx = -r.dx;
   const ty = -r.dy;
   const dot = r.bx * tx + r.by * ty;
-  if (dot >= cosSwing) {
+  if (!r.swinging || dot >= cosSwing) {
     r.bx = tx;
     r.by = ty;
+    r.swinging = false;
     return;
   }
   const cross = r.bx * ty - r.by * tx;
@@ -259,6 +266,8 @@ export function stepWorld(world: World): void {
     captureUnder(world, r);
     if (r.primary) captureBeam(world, r);
   }
+
+  updatePickups(world, (w, cell, side) => capture(w, cell, side, 'pickup'));
 
   for (const s of [0, 1] as const) {
     if (world.counts[other(s)] === 0) endMatch(world, s, 'wipeout');

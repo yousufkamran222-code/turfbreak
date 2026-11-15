@@ -35,7 +35,7 @@ export const tuning = {
     swingRate: 6,
   },
   input: {
-    /** Default redirect rules; a match can override them (the Phase 2 input variants do). */
+    /** Default redirect rules; a match can override them (Mods such as Quick Hands and Slingshot will). */
     redirect: {
       /** Seconds for a charge to come back. */
       cooldownSeconds: 5,
@@ -46,12 +46,6 @@ export const tuning = {
       dashMul: 1,
       dashSeconds: 1,
     },
-    /** Hold-to-boost alternative: speed multiplier while boosting. */
-    boostMultiplier: 1.6,
-    /** Seconds a full meter lasts while held. */
-    boostDrainSeconds: 2,
-    /** Seconds for an empty meter to refill while not held. */
-    boostRefillSeconds: 6,
   },
   ai: {
     /** How far ahead a controller looks when scoring a heading. */
@@ -63,8 +57,13 @@ export const tuning = {
     assist: { aimError: 0.3, reactionSeconds: 1.5, minGain: 4 },
     /** Seconds to wait before re-checking when no heading was worth a redirect. */
     recheckSeconds: 0.25,
-    /** Boost controller: boost when at least this many enemy cells lie ahead. */
-    boostThreshold: 6,
+    /** A pickup is worth this many enemy cells to a controller, minus one cell per `pickupDistanceCost` units away. */
+    pickupValue: 24,
+    pickupDistanceCost: 70,
+    /** Weight on the cells a beam would sweep during the turn (Ricochet). */
+    sweepWeight: 0.4,
+    sweepStep: 0.25,
+    sweepSpacing: 40,
   },
   tension: {
     /** Final seconds in which the HUD and audio turn urgent (presentation only). */
@@ -74,6 +73,17 @@ export const tuning = {
     underdogMax: 0.06,
     /** A new leader must be ahead by this many cells before it counts as a lead change. */
     leadHysteresis: 3,
+  },
+  pickups: {
+    /** First spawn, then one every few seconds while fewer than `maxOnMap` are out. */
+    firstSeconds: 3,
+    everySeconds: 6,
+    maxOnMap: 2,
+    lifetimeSeconds: 10,
+    /** Grab distance from the pickup centre, added to the runner's body radius. */
+    radius: 32,
+    /** Spawns avoid points this close to a primary runner, so nobody gets one for free. */
+    minDistanceFromRunner: 220,
   },
   match: {
     durationSeconds: 40,
