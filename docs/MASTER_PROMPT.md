@@ -162,8 +162,8 @@ A runner is a moving agent belonging to a side. Each side starts with one primar
 
 Tension tools, all mild at first and all tunable:
 
-- **Underdog boost:** the trailing side's runners gain speed in proportion to the deficit, up to 15%.
-- **Overtime surge:** in the last 10 seconds, capture radius effects and Core triggers are amplified for both sides, so late swings are possible.
+- **Underdog boost:** the trailing side's runners gain speed in proportion to the deficit, up to 6% (lowered from 15% in Phase 2, which cancelled out player skill).
+- **Overtime surge:** removed in Phase 2. The lab showed it added no tension and skewed balance toward hit-scaling Cores. The last 10 seconds still turn urgent in the HUD and audio.
 
 The lab measures whether these produce the tension in pillar 1. Remove either if it is not needed.
 
@@ -175,13 +175,13 @@ The lab measures whether these produce the tension in pillar 1. Remove either if
 - **Speed:** a 1x and 2x toggle. Player matches cannot be skipped.
 - **Assist:** a settings option lets the game use the player's redirect with a mediocre heuristic, for accessibility and for players who want to watch.
 
-Phase 2 tests this input against alternatives before anything is built on it.
+Phase 2 tests this input against alternatives before anything is built on it. The variants under test are Redirect (5 s), Redirect+ (3 s, each redirect counts as a hit), Hold to boost and No input (`src/content/inputs.ts`).
 
 ### 5.5 Ability system
 
 Cores and Mods are built from triggers, counters and effects.
 
-- **Hooks:** `onMatchStart`, `onStep`, `onHit`, `onWallBounce`, `onClash`, `onCapture`, `onCellLost`, `onRedirect`, `onInterval(seconds)`, `onLastSeconds(seconds)`, `onLeadChange`.
+- **Hooks:** `onMatchStart`, `onStep`, `onHit`, `onWallBounce`, `onClash`, `onCapture`, `onCellLost`, `onRedirect`, `onInterval(seconds)`, `onLastSeconds(seconds)`, `onLeadChange`. Built so far: `onMatchStart`, `onStep`, `onHit` (with kind wall, clash or redirect), `onCapture`, `onRedirect`.
 - **Context API given to hooks:** read-only views of the world, plus a small set of mutators: `addStat`, `mulStat`, `addStacks`, `spawnRunner`, `captureCells`, `captureRadius`, `shieldCells`, `lockCells`, `fireBeam`, `pushRunner`, `teleportRunner`, `schedule`, and the sim PRNG. Hooks may not mutate the world any other way.
 - **Stats:** speed, body radius, capture radius, beam length, trigger thresholds, cooldowns. Each stat has an additive layer and a multiplicative layer; additive applies first.
 - **Stacks:** each Core has one named stack counter (laser length, splits, pulse radius). Mods that say "your Core's stacks" act on it, which is how one Mod works with every Core.

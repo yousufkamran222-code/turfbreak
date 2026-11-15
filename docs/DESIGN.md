@@ -11,6 +11,28 @@ Living design detail as it firms up. The brief (`MASTER_PROMPT.md` sections 5 an
 - **Splits.** Spawned at the parent's position with a random heading. Over the per-side cap of 32, each extra spawn becomes +2% side speed (overflow), shown as a spawn that did not appear.
 - **Sudden death.** A tie at the buzzer continues until the next capture. If none comes within 10 s, the side with more hits wins, then a seeded coin.
 
+## Input and tension (Phase 2)
+
+- **Input records.** `{ step, side, type: 'redirect', x, y }` or `{ step, side, type: 'boost', held }`. The UI queues them for the next step. The sim applies them at the start of the step, after which built-in controllers act, then cooldowns tick. Everything applied lands in `world.inputLog`. Seed, Cores and that log replay a match exactly (tested).
+- **Redirect.** Points the primary's heading straight at the tap and spends a charge; the cooldown starts when a charge is spent. The beam then swings through the turn, so for Ricochet a sharp redirect is also a sweep.
+- **Controllers.** The heuristic scores 16 fixed headings (written as literals, no trig) by counting enemy cells along a 1,100-unit bouncing ray. It redirects when the best beats the current heading by `minGain` cells, after a reaction delay, with aim error. If nothing is worth it, it re-checks every 0.25 s. Assist uses the same code with worse numbers. The boost controller holds when enough enemy cells lie ahead.
+- **Underdog boost.** The trailing side's speed factor is 1 + min(6%, 0.5 × deficit share).
+
+## Juice and audio (Phase 2)
+
+- Everything is driven by the sim's event queue and has its own cosmetic PRNG stream.
+- **Capture pops:** a white flash and a scale pop, staggered by 12 ms per cell within a frame (capped at 0.3 s), so a beam sweep reads as a wave.
+- **Sparks:** from a pooled particle array (480 max), drawn as additive streaks.
+- **Shake:** trauma-based (trauma squared × 14 units), added by clashes, primary wall bounces and Core triggers.
+- **Hit-stop:** 60 ms on clashes involving a primary.
+- **Tap marker:** an expanding ring where the redirect aimed, plus a pulsing ring around the player's runner showing the cooldown.
+- **Audio:**
+  - Each side has its own pentatonic scale. Wall bounces climb it and the climb resets after 1.2 s without a hit.
+  - Capture ticks are limited to one per side per 45 ms.
+  - Clashes, Core triggers and redirects each have their own sounds.
+  - A tick plays every second in the last 10 s, and a stinger on win or loss.
+  - The audio context starts on the Play tap and suspends when the app pauses.
+
 ## Look (Phase 1)
 
 - Territory is the side's colour mixed 38% toward the background; edges are white at 10%; the frontier is white at 90%.

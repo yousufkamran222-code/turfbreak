@@ -2,6 +2,17 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-15: Phase 2
+
+- **Overtime surge removed.** Old (5.3): "in the last 10 seconds, capture radius effects and Core triggers are amplified". The lab (both sides on the rival heuristic) showed that it does not help tension: the final lead change already comes at about 38 s, and early-decided matches were unchanged. It also skews balance: doubling hit triggers feeds Splitter's late explosion, and Ricochet fell from about 50% to 25–29%. 5.3 says to remove a tool that is not needed. The urgent timer and audio in the last 10 s stay, as presentation only.
+- **Underdog boost kept at 6%, not 15%.** At 15% it cancelled out skill: the redirect heuristic was worth −5 to −1 points, because playing well made the rival faster. At 6% it still lifts lead changes (6.3 to 7.6 for Ricochet vs Splitter) and cuts early-decided matches from 21% to 16%.
+- **Lead changes use a 3-cell hysteresis.** A side takes the lead only when 3 cells ahead. This fixes the noisy Phase 1 metric and stops the territory-bar thump from flickering.
+- **Redirect rules are per-match config** (`MatchConfig.redirect`) with defaults in `tuning.input.redirect`. This lets the debug switch compare variants without code changes. Added `onRedirect` to the hooks and `'redirect'` as a hit kind.
+- **Input variants for the fun gate:** Redirect (the brief's: 5 s), Redirect+ (3 s, each redirect counts as a hit), Hold to boost (×1.6 on a 2 s meter that refills in 6 s) and No input. The rival uses the same input as the player. Yousuf picks one after playing; see PROGRESS for the lab numbers behind each.
+- **Controllers run inside the sim,** each side on its own PRNG stream (`ai0`, `ai1`). Rival redirects are therefore deterministic and replayable, and one side's AI never shifts the other's.
+- **The rival looks 1,100 units ahead** along its bouncing path (was 520). A redirect shapes about 5 s of travel, and the longer ray roughly doubled the heuristic's value for Ricochet.
+- **Setup screen starts on a random seed.** Phase 1 always opened on seed 1, which Ricochet wins, so repeated tests looked one-sided.
+
 ## 2026-11-15: Phase 1
 
 - **Ricochet's beam swings instead of tracing the path.** Old (5.6): "trails a beam behind it that captures cells it sweeps". First build: the beam followed the runner's exact path. The lab showed that this only re-covers cells the runner has just taken, and Ricochet won 0% against Splitter at every value tried. New: a straight beam trails behind the runner, and after each turn it swings back to trailing at `beam.swingRate` (6 rad/s), sweeping an arc. Area per bounce grows with the square of beam length, and the swing is very visible. It is still "a beam behind it that captures what it sweeps"; this is the reading the lab supports.

@@ -92,4 +92,7 @@ export const Stream = {
   arena: 0,
   sim: 1,
   cosmetic: 2,
+  /** One stream per side's controller, so one side's AI never shifts the other's. */
+  ai0: 3,
+  ai1: 4,
 } as const;

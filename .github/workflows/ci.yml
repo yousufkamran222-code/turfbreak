@@ -27,7 +27,8 @@ jobs:
       - run: npm run typecheck
       # Unit, invariant, determinism and golden-hash tests.
       - run: npm test
-      # 100 seeds x 2 sides = 200 headless matches with invariants checked on every step.
-      - run: npm run lab -- --seeds 100 --smoke
+      # 100 seeds x 2 sides = 200 headless matches, both sides on the rival controller,
+      # with invariants checked on every step.
+      - run: npm run lab -- --seeds 100 --smoke --control rival:rival
       - run: npm run build:web
       - run: npm run check:size

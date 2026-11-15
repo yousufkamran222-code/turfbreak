@@ -1,5 +1,8 @@
 import type { RunnerShape } from '../sim/abilities';
+import { cooldownSteps } from '../sim/input';
+import { beamLength } from '../sim/step';
 import { statValue, type World } from '../sim/world';
+import type { Juice } from './juice';
 import { mix, rgba } from './colors';
 
 export const BACKGROUND = '#0b0d12';
@@ -112,7 +115,7 @@ export class ArenaRenderer {
    * `prevX/prevY` hold runner positions from the previous sim step (by index),
    * and `alpha` is how far the renderer is between that step and the current one.
    */
-  draw(world: World, prevX: Float64Array, prevY: Float64Array, alpha: number): void {
+  draw(world: World, prevX: Float64Array, prevY: Float64Array, alpha: number, juice: Juice, now: number): void {
     if (this.arenaKey !== world.arena) this.buildPaths(world);
     const c = this.ctx;
     const k = this.pxPerUnit;
@@ -121,7 +124,7 @@ export class ArenaRenderer {
     c.globalCompositeOperation = 'source-over';
     c.fillStyle = BACKGROUND;
     c.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    c.setTransform(k, 0, 0, k, 0, 0);
+    c.setTransform(k, 0, 0, k, juice.shake.x * k, juice.shake.y * k);
 
     // Territory, one fill style change per side.
     const owner = world.owner;
@@ -151,13 +154,16 @@ export class ArenaRenderer {
     c.lineWidth = 2.5 * unit;
     c.stroke();
 
+    // Capture pops draw above cells but below runners, so the frontier stays legible.
+    juice.drawPops(c, world, this.cellPaths, now);
+
     // Beams, drawn additively with a wide faint pass for glow (no shadowBlur).
     c.globalCompositeOperation = 'lighter';
     const rs = world.runners;
     for (let i = 0; i < rs.length; i++) {
       const r = rs[i]!;
       if (!r.primary) continue;
-      const length = statValue(world.sides[r.side], 'beamLength');
+      const length = beamLength(world, r);
       if (length <= 0) continue;
       const hx = lerp(prevX[i]!, r.x, alpha);
       const hy = lerp(prevY[i]!, r.y, alpha);
@@ -174,7 +180,11 @@ export class ArenaRenderer {
       c.lineWidth = 9;
       c.stroke();
     }
+    juice.drawParticles(c, [this.palettes[0].beam, this.palettes[1].beam]);
     c.globalCompositeOperation = 'source-over';
+    juice.drawTaps(c, [this.palettes[0].core, this.palettes[1].core], now);
+
+    this.drawInputRing(world, prevX, prevY, alpha, now, unit);
 
     // Runners: splits first, primaries on top.
     for (const primaryPass of [false, true]) {
@@ -202,6 +212,39 @@ export class ArenaRenderer {
         c.stroke();
       }
     }
+  }
+
+  /** The player's (side 0) redirect cooldown or boost meter, as a ring around their primary. */
+  private drawInputRing(world: World, prevX: Float64Array, prevY: Float64Array, alpha: number, now: number, unit: number): void {
+    if (world.inputMode === 'none') return;
+    const i = world.runners.findIndex((r) => r.side === 0 && r.primary);
+    if (i < 0) return;
+    const r = world.runners[i]!;
+    const st = world.sides[0];
+    const x = lerp(prevX[i]!, r.x, alpha);
+    const y = lerp(prevY[i]!, r.y, alpha);
+    let fill: number;
+    let ready: boolean;
+    if (world.inputMode === 'redirect') {
+      ready = st.charges > 0;
+      fill = ready ? 1 : 1 - st.chargeSteps / cooldownSteps(world);
+    } else {
+      fill = st.boostMeter;
+      ready = fill > 0.4;
+    }
+    const c = this.ctx;
+    const rad = statValue(st, 'bodyRadius') * 1.7 + 14;
+    c.lineCap = 'round';
+    c.lineWidth = 4.5 * unit * 1.6;
+    c.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    c.beginPath();
+    c.arc(x, y, rad, 0, Math.PI * 2);
+    c.stroke();
+    const pulse = ready ? 0.75 + 0.25 * Math.sin(now * 8) : 0.85;
+    c.strokeStyle = ready ? `rgba(255, 255, 255, ${pulse.toFixed(3)})` : this.palettes[0].beam;
+    c.beginPath();
+    c.arc(x, y, rad, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, fill)));
+    c.stroke();
   }
 }
 
