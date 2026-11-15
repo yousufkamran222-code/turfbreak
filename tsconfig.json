@@ -13,6 +13,8 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "noEmit": true,
     "resolveJsonModule": true
   },

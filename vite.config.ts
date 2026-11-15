@@ -31,6 +31,9 @@ export default defineConfig({
     __APP_COMMIT__: JSON.stringify(commitHash()),
     'import.meta.env.VITE_PLATFORM': JSON.stringify(platform),
   },
+  oxc: {
+    jsx: { runtime: 'automatic', importSource: 'preact' },
+  },
   build: {
     target: 'es2022',
     outDir: 'dist',
