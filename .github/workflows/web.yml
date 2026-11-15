@@ -1,0 +1,62 @@
+name: Web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Build CrazyGames target
+        run: npm run build:crazygames && npm run check:size
+      - name: Zip portal build
+        id: zip
+        run: |
+          name="turfbreak-crazygames-${GITHUB_SHA::7}.zip"
+          # index.html must sit at the zip root.
+          (cd dist && zip -qr "../$name" .)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: crazygames-zip
+          path: ${{ steps.zip.outputs.name }}
+      - name: Publish to rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/publish-latest.sh turfbreak-crazygames- "${{ steps.zip.outputs.name }}"
+
+      - name: Build web target
+        run: npm run build:web && npm run check:size
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

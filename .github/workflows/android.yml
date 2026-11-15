@@ -1,0 +1,50 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - run: npm ci
+      - run: npm run build:android
+      - run: npx cap sync android
+      - name: Assemble debug APK
+        working-directory: android
+        run: |
+          version=$(node -p "require('../package.json').version")
+          ./gradlew assembleDebug --no-daemon -PversionCode=${{ github.run_number }} -PversionName="$version"
+      - name: Name APK
+        id: apk
+        run: |
+          name="turfbreak-debug-${GITHUB_SHA::7}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: debug-apk
+          path: ${{ steps.apk.outputs.name }}
+      - name: Publish to rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/publish-latest.sh turfbreak-debug- "${{ steps.apk.outputs.name }}"

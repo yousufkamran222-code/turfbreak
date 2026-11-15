@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Rng > matches a golden sequence, so a PRNG change cannot slip in unnoticed 1`] = `
+[
+  3681621431,
+  4250209148,
+  940641817,
+  1738069921,
+]
+`;
