@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Turfbreak</string>
+    <string name="title_activity_main">Turfbreak</string>
+    <string name="package_name">com.yousufkamran.turfbreak</string>
+    <string name="custom_url_scheme">com.yousufkamran.turfbreak</string>
+</resources>

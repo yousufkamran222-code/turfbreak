@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository secret $name. Add it under Settings > Secrets and variables > Actions."
+              missing=1
+            fi
+          done
+          exit $missing
+      - uses: actions/checkout@v7
+      - name: Check tag matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version v$version."
+            exit 1
+          fi
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - run: npm ci
+      - run: npm test
+
+      - name: Portal zip
+        run: |
+          npm run build:crazygames && npm run check:size
+          (cd dist && zip -qr "../turfbreak-crazygames-${GITHUB_REF_NAME}.zip" .)
+
+      - run: npm run build:android
+      - run: npx cap sync android
+      - name: Build signed AAB and APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          version="${GITHUB_REF_NAME#v}"
+          # Release versionCode = this workflow's run number + 100000, so it always
+          # exceeds the debug builds' codes and keeps increasing for Play.
+          code=$(( ${{ github.run_number }} + 100000 ))
+          ./gradlew bundleRelease assembleRelease --no-daemon -PversionCode=$code -PversionName="$version"
+          rm -f "$ANDROID_KEYSTORE_PATH"
+      - name: Collect files
+        run: |
+          cp android/app/build/outputs/bundle/release/app-release.aab "turfbreak-${GITHUB_REF_NAME}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "turfbreak-${GITHUB_REF_NAME}.apk"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "Turfbreak $GITHUB_REF_NAME" --generate-notes \
+            "turfbreak-${GITHUB_REF_NAME}.aab" "turfbreak-${GITHUB_REF_NAME}.apk" "turfbreak-crazygames-${GITHUB_REF_NAME}.zip"

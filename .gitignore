@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.vite/
+# Release keystores must never be committed. The debug keystore is the one exception.
+*.jks
+*.keystore
+!android/app/debug.keystore
