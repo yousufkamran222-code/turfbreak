@@ -2,15 +2,11 @@ import { tuning } from '../content/tuning';
 import { emit, type Runner, type SideIndex, type World } from './world';
 
 /** The input scheme under test (MASTER_PROMPT 5.4; Phase 2 compares these). */
-export type InputMode = 'redirect' | 'boost' | 'none';
+export type InputMode = 'redirect' | 'none';
 
 /** Player input enters the sim only as timestamped records (MASTER_PROMPT 4.3 rule 2). */
-export type InputRecord =
-  | { step: number; side: SideIndex; type: 'redirect'; x: number; y: number }
-  | { step: number; side: SideIndex; type: 'boost'; held: boolean };
+export type InputRecord = { step: number; side: SideIndex; type: 'redirect'; x: number; y: number };
 
-/** Distributes Omit over the union, so each variant keeps its own fields. */
-type WithoutStep<T> = T extends unknown ? Omit<T, 'step'> : never;
 
 export interface RedirectRules {
   cooldownSeconds: number;
@@ -30,8 +26,8 @@ export function primaryOf(world: World, side: SideIndex): Runner | null {
 }
 
 /** Queue an input from outside the sim. It applies on the next step. */
-export function queueInput(world: World, input: WithoutStep<InputRecord>): void {
-  world.pendingInputs.push({ ...input, step: world.step + 1 } as InputRecord);
+export function queueInput(world: World, input: Omit<InputRecord, 'step'>): void {
+  world.pendingInputs.push({ ...input, step: world.step + 1 });
 }
 
 export function canRedirect(world: World, side: SideIndex): boolean {
@@ -49,6 +45,8 @@ export function applyRedirect(world: World, side: SideIndex, x: number, y: numbe
   if (len < 1e-6) return false;
   r.dx = dx / len;
   r.dy = dy / len;
+  // A redirect is the only thing that makes a beam swing (and sweep) rather than snap.
+  r.swinging = true;
   const st = world.sides[side];
   const rules = world.redirectRules;
   st.charges--;
@@ -62,22 +60,13 @@ export function applyRedirect(world: World, side: SideIndex, x: number, y: numbe
   return true;
 }
 
-export function applyBoost(world: World, side: SideIndex, held: boolean): void {
-  if (world.inputMode !== 'boost') return;
-  const st = world.sides[side];
-  if (st.boostHeld === held) return;
-  st.boostHeld = held;
-  world.inputLog.push({ step: world.step, side, type: 'boost', held });
-}
-
 /** Apply every queued input whose step has come. */
 export function applyPendingInputs(world: World): void {
   const q = world.pendingInputs;
   let k = 0;
   while (k < q.length && q[k]!.step <= world.step) {
     const inp = q[k]!;
-    if (inp.type === 'redirect') applyRedirect(world, inp.side, inp.x, inp.y);
-    else applyBoost(world, inp.side, inp.held);
+    applyRedirect(world, inp.side, inp.x, inp.y);
     k++;
   }
   if (k > 0) q.splice(0, k);
@@ -87,9 +76,8 @@ export function cooldownSteps(world: World): number {
   return Math.round(world.redirectRules.cooldownSeconds * tuning.sim.stepsPerSecond);
 }
 
-/** Cooldowns and the boost meter. */
+/** Redirect cooldowns. */
 export function tickInputState(world: World): void {
-  const dt = world.dt;
   const max = world.redirectRules.maxCharges;
   for (const s of [0, 1] as const) {
     const st = world.sides[s];
@@ -101,13 +89,6 @@ export function tickInputState(world: World): void {
       }
     }
     if (st.dashSteps > 0) st.dashSteps--;
-    if (st.boostHeld && st.boostMeter > 0) st.boostMeter = Math.max(0, st.boostMeter - dt / tuning.input.boostDrainSeconds);
-    else if (!st.boostHeld) st.boostMeter = Math.min(1, st.boostMeter + dt / tuning.input.boostRefillSeconds);
   }
 }
 
-/** Is this side boosting right now? */
-export function isBoosting(world: World, side: SideIndex): boolean {
-  const st = world.sides[side];
-  return world.inputMode === 'boost' && st.boostHeld && st.boostMeter > 0;
-}

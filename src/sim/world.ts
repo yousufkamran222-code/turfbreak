@@ -3,6 +3,7 @@ import type { AbilityContext, CoreDef, HitInfo, SpawnOptions } from './abilities
 import { generateArena, findCell, type Arena } from './arena';
 import type { EndReason, SimEvent } from './events';
 import type { ControllerSpec, InputMode, InputRecord, RedirectRules } from './input';
+import { pickups as allPickups, type PickupDef } from '../content/pickups';
 import { Rng, Stream } from './rng';
 import { rotateSmall } from './vec';
 
@@ -22,9 +23,10 @@ export interface Runner {
   speedMul: number;
   /** Last cell under the runner, used as the lookup hint. */
   cell: number;
-  /** Unit direction of the beam, which swings to trail behind the runner after each turn. */
+  /** Unit direction of the beam. It trails straight behind, and swings (sweeping) only after a redirect. */
   bx: number;
   by: number;
+  swinging: boolean;
 }
 
 export const STAT_NAMES = ['speed', 'bodyRadius', 'captureRadius', 'beamLength'] as const;
@@ -54,13 +56,24 @@ export interface SideState {
   /** Steps of post-redirect dash left, and redirects waiting to count as hits. */
   dashSteps: number;
   pendingRedirectHits: number;
-  /** Hold-to-boost: whether the input is held, and the meter from 0 to 1. */
-  boostHeld: boolean;
-  boostMeter: number;
-  /** Combined speed factor from underdog boost and hold-to-boost, recomputed each step. */
+  /** Combined speed factor from underdog boost, redirect dash and Surge, recomputed each step. */
   speedFactor: number;
   /** Controller bookkeeping: step at which it may act next, or -1 when waiting for a charge. */
   aiReadyStep: number;
+  /** Pickup effects: steps left of each, and the surge speed multiplier. */
+  surgeSteps: number;
+  surgeMul: number;
+  shieldSteps: number;
+  pickups: number;
+}
+
+export interface Pickup {
+  readonly id: number;
+  /** Index into the pickup definitions in the match config. */
+  readonly def: number;
+  readonly x: number;
+  readonly y: number;
+  readonly expiresStep: number;
 }
 
 export interface MatchConfig {
@@ -74,6 +87,8 @@ export interface MatchConfig {
   inputs?: readonly InputRecord[];
   /** Overrides for the redirect rules (Phase 2 compares variants). */
   redirect?: Partial<RedirectRules>;
+  /** Pickup definitions in play; an empty list turns pickups off. Defaults to the full set. */
+  pickups?: readonly PickupDef[];
   /** False in headless lab runs, so no event objects are created. */
   recordEvents?: boolean;
 }
@@ -98,6 +113,11 @@ export interface World {
   readonly pendingInputs: InputRecord[];
   /** Every input applied, in order: everything a replay needs besides seed and builds. */
   readonly inputLog: InputRecord[];
+  readonly pickupDefs: readonly PickupDef[];
+  /** Pickups on the map, oldest first. */
+  readonly pickups: Pickup[];
+  nextPickupId: number;
+  nextPickupStep: number;
   step: number;
   phase: Phase;
   suddenDeathStep: number;
@@ -156,6 +176,7 @@ export function addRunner(
     cell: findCell(world.arena, x, y, 0),
     bx: -dx,
     by: -dy,
+    swinging: false,
   };
   world.runners.push(r);
   world.sides[side].runnerCount++;
@@ -241,10 +262,12 @@ export function createWorld(cfg: MatchConfig): World {
     redirects: 0,
     dashSteps: 0,
     pendingRedirectHits: 0,
-    boostHeld: false,
-    boostMeter: 1,
     speedFactor: 1,
     aiReadyStep: -1,
+    surgeSteps: 0,
+    surgeMul: 1,
+    shieldSteps: 0,
+    pickups: 0,
   });
 
   const world: World = {
@@ -263,6 +286,10 @@ export function createWorld(cfg: MatchConfig): World {
     aiRngs: [new Rng(cfg.seed, Stream.ai0), new Rng(cfg.seed, Stream.ai1)],
     pendingInputs: [...(cfg.inputs ?? [])].sort((a, b) => a.step - b.step),
     inputLog: [],
+    pickupDefs: cfg.pickups ?? allPickups,
+    pickups: [],
+    nextPickupId: 0,
+    nextPickupStep: Math.round(tuning.pickups.firstSeconds * tuning.sim.stepsPerSecond),
     step: 0,
     phase: 'running',
     suddenDeathStep: 0,

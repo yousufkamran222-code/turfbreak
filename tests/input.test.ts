@@ -41,21 +41,6 @@ describe('redirect', () => {
   });
 });
 
-describe('hold to boost', () => {
-  it('speeds the side up while held, drains the meter, and refills after release', () => {
-    const w = createWorld({ seed: 1, cores: [blank, blank], inputMode: 'boost' });
-    queueInput(w, { side: 0, type: 'boost', held: true });
-    stepWorld(w);
-    expect(w.sides[0].speedFactor).toBeGreaterThan(1.5);
-    for (let i = 0; i < tuning.input.boostDrainSeconds * 60 + 5; i++) stepWorld(w);
-    expect(w.sides[0].boostMeter).toBe(0);
-    expect(w.sides[0].speedFactor).toBeLessThan(1.5);
-    queueInput(w, { side: 0, type: 'boost', held: false });
-    for (let i = 0; i < 60; i++) stepWorld(w);
-    expect(w.sides[0].boostMeter).toBeGreaterThan(0.1);
-  });
-});
-
 describe('underdog boost', () => {
   it('speeds up only the trailing side, capped', () => {
     const w = blankWorld();

@@ -41,9 +41,11 @@ export function createHud() {
     winner: signal<SideIndex | -1>(-1),
     endReason: signal<EndReason | null>(null),
     leadChanges: signal(0),
-    /** Player input gauge from 0 to 1 (redirect cooldown or boost meter), and whether it is usable. */
+    /** Player redirect gauge from 0 to 1, and whether a charge is ready. */
     gauge: signal(1),
     gaugeReady: signal(true),
+    /** Active pickup effects per side, for the chips under each card. */
+    effects: [signal(''), signal('')] as const,
     /** Show the one-line input prompt (MASTER_PROMPT 6.6). */
     prompt: signal(false),
     speed: signal<1 | 2>(1),
@@ -82,7 +84,6 @@ export class MatchSession {
       seed: cfg.seed,
       cores: cfg.cores,
       inputMode: cfg.variant.mode,
-      ...(cfg.variant.redirect ? { redirect: cfg.variant.redirect } : {}),
       controllers: [cfg.assist, cfg.rival],
     });
     this.renderer = new ArenaRenderer(canvas, [
@@ -121,7 +122,7 @@ export class MatchSession {
     this.hud.speed.value = this.hud.speed.value === 1 ? 2 : 1;
   }
 
-  /** A press on the arena at arena coordinates. */
+  /** A tap on the arena at arena coordinates. */
   press(x: number, y: number): void {
     if (this.cfg.assist || this.world.phase === 'ended') return;
     const mode = this.world.inputMode;
@@ -129,16 +130,9 @@ export class MatchSession {
       if (this.world.sides[0].charges <= 0) return;
       queueInput(this.world, { side: 0, type: 'redirect', x, y });
       this.playerUsedInput = true;
-    } else if (mode === 'boost') {
-      queueInput(this.world, { side: 0, type: 'boost', held: true });
-      this.playerUsedInput = true;
     }
   }
 
-  release(): void {
-    if (this.cfg.assist || this.world.inputMode !== 'boost') return;
-    queueInput(this.world, { side: 0, type: 'boost', held: false });
-  }
 
   private syncPrev(from: number): void {
     const rs = this.world.runners;
@@ -201,6 +195,9 @@ export class MatchSession {
         case 'Redirect':
           if (ev.side === 0) this.synth.redirect();
           break;
+        case 'PickupCollected':
+          this.synth.pickup(ev.kind === 'blast');
+          break;
         case 'LeadChange':
           this.hud.leadPulse.value++;
           break;
@@ -222,6 +219,11 @@ export class MatchSession {
     const w = this.world;
     const h = this.hud;
     for (const s of [0, 1] as const) {
+      const st = w.sides[s];
+      const fx: string[] = [];
+      if (st.surgeSteps > 0) fx.push('SURGE');
+      if (st.shieldSteps > 0) fx.push('SHIELD');
+      h.effects[s].value = fx.join(' · ');
       h.counts[s].value = w.counts[s];
       h.stacks[s].value = w.sides[s].stacks;
       h.runners[s].value = w.sides[s].runnerCount;
@@ -241,9 +243,6 @@ export class MatchSession {
     if (w.inputMode === 'redirect') {
       h.gaugeReady.value = st.charges > 0;
       h.gauge.value = st.charges > 0 ? 1 : 1 - st.chargeSteps / cooldownSteps(w);
-    } else if (w.inputMode === 'boost') {
-      h.gauge.value = st.boostMeter;
-      h.gaugeReady.value = st.boostMeter > 0;
     }
     h.prompt.value =
       !this.cfg.assist &&

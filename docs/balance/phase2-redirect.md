@@ -7,9 +7,9 @@ Side A uses the controller shown; side B never uses the input. Same seeds, both 
 
 | Pairing | No input | Random aim | Heuristic | Heuristic gain | Target gain |
 | --- | --- | --- | --- | --- | --- |
-| ricochet vs ricochet | 50.3% | 53.0% | 53.0% | +2.7 pts | +10 to +20 pts |
-| ricochet vs splitter | 41.0% | 47.0% | 47.5% | +6.5 pts | +10 to +20 pts |
-| splitter vs splitter | 47.7% | 34.3% | 47.8% | +0.2 pts | +10 to +20 pts |
+| ricochet vs ricochet | 48.7% | 87.5% | 98.5% | +49.8 pts | +10 to +20 pts |
+| ricochet vs splitter | 0.0% | 13.2% | 47.3% | +47.3 pts | +10 to +20 pts |
+| splitter vs splitter | 52.3% | 39.3% | 55.8% | +3.5 pts | +10 to +20 pts |
 
 ## Tension tools
 
@@ -17,9 +17,9 @@ Both sides use the rival heuristic. Same seeds for every variant.
 
 | Pairing | Tools | Win rate A | Lead changes | Final lead change (median) | Decided early | Mean margin |
 | --- | --- | --- | --- | --- | --- | --- |
-| ricochet vs ricochet | underdog off | – | 10.66 | 38.4 s | 9.0% | 44.4 |
-| ricochet vs ricochet | underdog on | – | 11.75 | 38.0 s | 10.0% | 48.2 |
-| ricochet vs splitter | underdog off | 56.0% | 6.29 | 38.4 s | 21.0% | 36.1 |
-| ricochet vs splitter | underdog on | 48.8% | 7.58 | 38.6 s | 15.8% | 32.7 |
-| splitter vs splitter | underdog off | – | 6.77 | 37.0 s | 1.0% | 16.6 |
-| splitter vs splitter | underdog on | – | 8.15 | 38.1 s | 0.0% | 12.9 |
+| ricochet vs ricochet | underdog off | – | 7.55 | 39.2 s | 7.3% | 73.8 |
+| ricochet vs ricochet | underdog on | – | 7.63 | 39.3 s | 5.7% | 72.8 |
+| ricochet vs splitter | underdog off | 52.2% | 7.72 | 39.1 s | 7.8% | 61.1 |
+| ricochet vs splitter | underdog on | 51.5% | 8.15 | 39.1 s | 4.8% | 64.8 |
+| splitter vs splitter | underdog off | – | 6.57 | 35.8 s | 0.7% | 23.5 |
+| splitter vs splitter | underdog on | – | 7.68 | 36.8 s | 1.3% | 19.3 |

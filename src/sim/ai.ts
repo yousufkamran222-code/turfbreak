@@ -1,6 +1,7 @@
 import { tuning } from '../content/tuning';
 import { findCell } from './arena';
-import { applyBoost, applyRedirect, primaryOf } from './input';
+import { applyRedirect, primaryOf } from './input';
+import { beamLength, runnerSpeed } from './step';
 import { rotateSmall } from './vec';
 import type { Runner, SideIndex, World } from './world';
 
@@ -51,6 +52,37 @@ export function scoreHeading(world: World, r: Runner, hx: number, hy: number): n
   return score;
 }
 
+const sweepStep = tuning.ai.sweepStep;
+const cosSweep = 1 - (sweepStep * sweepStep) / 2 + sweepStep ** 4 / 24;
+
+/**
+ * Enemy cells a beam would pass over while swinging from its current direction to
+ * trail behind heading (hx, hy). Zero for runners without a beam.
+ */
+export function scoreSweep(world: World, r: Runner, hx: number, hy: number): number {
+  const length = beamLength(world, r);
+  if (length <= 0) return 0;
+  const size = world.arena.size;
+  const tx = -hx;
+  const ty = -hy;
+  const b = { dx: r.bx, dy: r.by };
+  let score = 0;
+  let hint = r.cell;
+  for (let guard = 0; guard < 16; guard++) {
+    const dot = b.dx * tx + b.dy * ty;
+    if (dot >= cosSweep) break;
+    rotateSmall(b, b.dx * ty - b.dy * tx >= 0 ? sweepStep : -sweepStep);
+    for (let d = tuning.ai.sweepSpacing; d <= length; d += tuning.ai.sweepSpacing) {
+      const x = r.x + b.dx * d;
+      const y = r.y + b.dy * d;
+      if (x < 0 || y < 0 || x > size || y > size) break;
+      hint = findCell(world.arena, x, y, hint);
+      if (world.owner[hint] !== r.side) score++;
+    }
+  }
+  return score * tuning.ai.sweepWeight;
+}
+
 function thinkRedirect(world: World, side: SideIndex): void {
   const spec = world.controllers[side];
   const st = world.sides[side];
@@ -80,7 +112,24 @@ function thinkRedirect(world: World, side: SideIndex): void {
   let bx = r.dx;
   let by = r.dy;
   for (const [hx, hy] of HEADINGS) {
-    const s = scoreHeading(world, r, hx, hy);
+    const s = scoreHeading(world, r, hx, hy) + scoreSweep(world, r, hx, hy);
+    if (s > best) {
+      best = s;
+      bx = hx;
+      by = hy;
+    }
+  }
+  // Race for a pickup when it is worth more than the best open heading and reachable in time.
+  const speed = runnerSpeed(world, r);
+  for (const p of world.pickups) {
+    const dx = p.x - r.x;
+    const dy = p.y - r.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1e-6) continue;
+    if (world.step + (dist / speed) * tuning.sim.stepsPerSecond >= p.expiresStep) continue;
+    const hx = dx / dist;
+    const hy = dy / dist;
+    const s = tuning.ai.pickupValue - dist / tuning.ai.pickupDistanceCost + scoreHeading(world, r, hx, hy) + scoreSweep(world, r, hx, hy);
     if (s > best) {
       best = s;
       bx = hx;
@@ -98,24 +147,11 @@ function thinkRedirect(world: World, side: SideIndex): void {
   st.aiReadyStep = -1;
 }
 
-function thinkBoost(world: World, side: SideIndex): void {
-  if (!world.controllers[side]) return;
-  const r = primaryOf(world, side);
-  if (!r) return;
-  const st = world.sides[side];
-  // Check a few times a second, not every step.
-  if (world.step % 10 !== side * 5) return;
-  const ahead = scoreHeading(world, r, r.dx, r.dy);
-  const want = st.boostHeld ? ahead >= tuning.ai.boostThreshold / 2 && st.boostMeter > 0 : ahead >= tuning.ai.boostThreshold && st.boostMeter > 0.4;
-  applyBoost(world, side, want);
-}
-
 /** Let built-in controllers act. Runs inside the step, so it is deterministic. */
 export function runControllers(world: World): void {
   if (world.phase === 'ended') return;
   for (const s of [0, 1] as const) {
     if (!world.controllers[s]) continue;
     if (world.inputMode === 'redirect') thinkRedirect(world, s);
-    else if (world.inputMode === 'boost') thinkBoost(world, s);
   }
 }

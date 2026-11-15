@@ -13,9 +13,10 @@ Living design detail as it firms up. The brief (`MASTER_PROMPT.md` sections 5 an
 
 ## Input and tension (Phase 2)
 
-- **Input records.** `{ step, side, type: 'redirect', x, y }` or `{ step, side, type: 'boost', held }`. The UI queues them for the next step. The sim applies them at the start of the step, after which built-in controllers act, then cooldowns tick. Everything applied lands in `world.inputLog`. Seed, Cores and that log replay a match exactly (tested).
-- **Redirect.** Points the primary's heading straight at the tap and spends a charge; the cooldown starts when a charge is spent. The beam then swings through the turn, so for Ricochet a sharp redirect is also a sweep.
-- **Controllers.** The heuristic scores 16 fixed headings (written as literals, no trig) by counting enemy cells along a 1,100-unit bouncing ray. It redirects when the best beats the current heading by `minGain` cells, after a reaction delay, with aim error. If nothing is worth it, it re-checks every 0.25 s. Assist uses the same code with worse numbers. The boost controller holds when enough enemy cells lie ahead.
+- **Input records.** `{ step, side, type: 'redirect', x, y }`. The UI queues them for the next step. The sim applies them at the start of the step, after which built-in controllers act, then cooldowns tick. Everything applied lands in `world.inputLog`. Seed, Cores and that log replay a match exactly (tested).
+- **Redirect.** Points the primary's heading straight at the tap and spends a charge; the cooldown starts when a charge is spent. It also sets the runner's beam swinging; this is the only way a beam sweeps (bounces and clashes snap it straight behind). For Ricochet a sharp redirect is therefore a big sweep, and the angle of the turn is the skill.
+- **Pickups.** Spawned from the sim PRNG, so they are part of the replay. Grab order alternates by step like captures. Surge multiplies the side's speed factor, Shield makes `capture` refuse to flip the owner's cells, Blast captures by centroid distance, Charge sets charges to 1.
+- **Controllers.** The heuristic scores 16 fixed headings (written as literals, no trig) by counting enemy cells along a 1,100-unit bouncing ray, plus 0.4 × the enemy cells a beam would sweep during the turn. It also considers heading straight at each reachable pickup, valued at 24 cells minus one per 70 units. It redirects when the best beats the current heading by `minGain` cells, after a reaction delay, with aim error. If nothing is worth it, it re-checks every 0.25 s. Assist uses the same code with worse numbers.
 - **Underdog boost.** The trailing side's speed factor is 1 + min(6%, 0.5 × deficit share).
 
 ## Juice and audio (Phase 2)

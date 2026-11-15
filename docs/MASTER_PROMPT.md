@@ -175,7 +175,24 @@ The lab measures whether these produce the tension in pillar 1. Remove either if
 - **Speed:** a 1x and 2x toggle. Player matches cannot be skipped.
 - **Assist:** a settings option lets the game use the player's redirect with a mediocre heuristic, for accessibility and for players who want to watch.
 
-Phase 2 tests this input against alternatives before anything is built on it. The variants under test are Redirect (5 s), Redirect+ (3 s, each redirect counts as a hit), Hold to boost and No input (`src/content/inputs.ts`).
+Phase 2 tested this input against alternatives (Redirect+ with a 3 s cooldown that counts as a hit, and Hold to boost); Yousuf chose Redirect at 5 s. Its main targets are pickups (5.4.1) and, for Ricochet, beam sweeps.
+
+### 5.4.1 Pickups
+
+Added in Phase 2 from play feedback. Temporary in-match upgrades give the redirect something concrete to aim at.
+
+- The first spawns 3 s in, then one every 6 s at a random cell centre at least 220 units from both primaries. At most 2 are on the map; each lasts 10 s and blinks in its last 2 s.
+- Only a primary runner grabs one, by touching it.
+- Starting set (`src/content/pickups.ts`):
+
+  | Pickup | Effect |
+  | --- | --- |
+  | Surge | Your runners move 50% faster for 4 s |
+  | Blast | Captures every cell within 170 units of the pickup |
+  | Charge | Your redirect is ready again at once |
+  | Shield | Your cells cannot be taken for 3 s |
+
+- Later Mods can build on pickups (for example, splits can grab them, pickups last longer, Blast is bigger).
 
 ### 5.5 Ability system
 
@@ -195,7 +212,7 @@ Each Core is a colour, a shape, a name and one signature ability. The HUD shows 
 
 | Core | Colour | Signature | Stack shown |
 | --- | --- | --- | --- |
-| Ricochet | Crimson | Trails a straight beam behind it; after each turn the beam swings back to trailing, capturing every cell it sweeps. The beam grows 38 units per hit (starts at 60) | Beam length |
+| Ricochet | Crimson | Trails a straight beam behind it. After a redirect the beam swings back to trailing, capturing every cell it sweeps; wall bounces and clashes snap it without sweeping. The beam grows 38 units per hit (starts at 60) | Beam length |
 | Splitter | Magenta | Every 7 hits (splits' hits count too), spawns a smaller, slower, permanent split runner | Splits |
 | Pulse | Cyan | Every 5 hits, emits a shockwave that captures in a radius; the radius grows each pulse | Pulse radius |
 | Bloom | Green | Cells it captures spread to one adjacent enemy cell after 2 seconds; the spread chance grows per capture | Spread chance |

@@ -40,6 +40,7 @@ function SideCard({ hud, side, core, look }: { hud: HudState; side: SideIndex; c
         <span class="stack-label">{core.stackLabel}</span>
         <span class="stack-value">{formatStacks(hud.stacks[side].value)}</span>
       </div>
+      <div class="effects">{hud.effects[side].value}</div>
     </div>
   );
 }

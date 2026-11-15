@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tuning } from '../src/content/tuning';
+import { queueInput } from '../src/sim/input';
 import { stepWorld } from '../src/sim/step';
 import { createWorld, statValue } from '../src/sim/world';
 import { blank, ricochet, splitter } from './helpers';
@@ -24,10 +25,11 @@ describe('Ricochet', () => {
   it('captures enemy cells along its beam', () => {
     const w = createWorld({ seed: 2, cores: [ricochet, blank] });
     w.sides[0].stats.beamLength.add = 600;
-    // A fresh beam trails back into home territory; aim it at the enemy for this test.
+    // A fresh beam trails back into home territory; aim it at the enemy and mark it mid-swing.
     const r = w.runners[0]!;
     r.bx = r.dx;
     r.by = r.dy;
+    r.swinging = true;
     const before = w.counts[0];
     stepWorld(w);
     const beamCaptures = w.events.filter((e) => e.type === 'CellCaptured' && e.cause === 'beam').length;
@@ -48,6 +50,32 @@ describe('Ricochet', () => {
     const dot = r.bx * -r.dx + r.by * -r.dy;
     expect(dot).toBeGreaterThan(-1);
     expect(Math.hypot(r.bx, r.by)).toBeCloseTo(1, 9);
+  });
+});
+
+describe('beam swing', () => {
+  it('snaps straight behind on a wall bounce, without sweeping', () => {
+    const w = createWorld({ seed: 3, cores: [ricochet, blank], pickups: [] });
+    const r = w.runners[0]!;
+    r.x = 30;
+    r.dx = -1;
+    r.dy = 0;
+    r.bx = 1;
+    r.by = 0;
+    for (let i = 0; i < 10; i++) stepWorld(w);
+    expect(r.swinging).toBe(false);
+    expect(r.bx).toBeCloseTo(-r.dx, 9);
+    expect(r.by).toBeCloseTo(-r.dy, 9);
+  });
+
+  it('swings over several steps after a redirect, then trails', () => {
+    const w = createWorld({ seed: 3, cores: [ricochet, blank], pickups: [] });
+    const r = w.runners[0]!;
+    queueInput(w, { side: 0, type: 'redirect', x: r.x - r.dx * 300, y: r.y - r.dy * 300 });
+    stepWorld(w);
+    expect(r.swinging).toBe(true);
+    for (let i = 0; i < 60 && r.swinging; i++) stepWorld(w);
+    expect(r.swinging).toBe(false);
   });
 });
 

@@ -2,7 +2,7 @@
  * Headless balance lab (MASTER_PROMPT 7.6).
  *
  *   npm run lab -- [--a ricochet --b splitter | --matrix] [--seeds 500] [--start 1]
- *                  [--control none:none] [--variant redirect|redirect-plus|boost|none]
+ *                  [--control none:none] [--variant redirect|none]
  *                  [--no-underdog] [--smoke]
  *                  [--redirect-value] [--tension] [--report docs/balance/name.md]
  *
@@ -114,6 +114,11 @@ interface Stats {
   stacksA: number[];
   stacksB: number[];
   redirectsA: number[];
+  pickupsA: number[];
+  pickupsB: number[];
+  /** Games where one side got more pickups, and how many of those it won. */
+  pickupLeadGames: number;
+  pickupLeadWins: number;
   ms: number;
 }
 
@@ -134,6 +139,10 @@ function play(a: string, b: string, control: [ControlName, ControlName], args: A
     stacksA: [],
     stacksB: [],
     redirectsA: [],
+    pickupsA: [],
+    pickupsB: [],
+    pickupLeadGames: 0,
+    pickupLeadWins: 0,
     ms: 0,
   };
   const check = args.smoke ? (w: World) => checkInvariants(w) : undefined;
@@ -143,8 +152,7 @@ function play(a: string, b: string, control: [ControlName, ControlName], args: A
     for (const swap of mirror ? [false] : [false, true]) {
       const cs = swap ? ([coreById(b), coreById(a)] as const) : ([coreById(a), coreById(b)] as const);
       const ctrl = swap ? ([controller(control[1]), controller(control[0])] as const) : ([controller(control[0]), controller(control[1])] as const);
-      const v = args.variant;
-      const r = runMatch({ seed, cores: cs, controllers: ctrl, inputMode: v.mode, ...(v.redirect ? { redirect: v.redirect } : {}) }, check);
+      const r = runMatch({ seed, cores: cs, controllers: ctrl, inputMode: args.variant.mode }, check);
       const sideA = swap ? 1 : 0;
       st.games++;
       if (r.winner === sideA) st.winsA++;
@@ -158,6 +166,12 @@ function play(a: string, b: string, control: [ControlName, ControlName], args: A
       st.stacksA.push(r.stacks[sideA]);
       st.stacksB.push(r.stacks[1 - sideA]!);
       st.redirectsA.push(r.redirects[sideA]);
+      st.pickupsA.push(r.pickups[sideA]);
+      st.pickupsB.push(r.pickups[1 - sideA]!);
+      if (r.pickups[0] !== r.pickups[1]) {
+        st.pickupLeadGames++;
+        if (r.winner === (r.pickups[0] > r.pickups[1] ? 0 : 1)) st.pickupLeadWins++;
+      }
     }
   }
   st.ms = performance.now() - t0;
@@ -195,6 +209,8 @@ function describe(a: string, b: string, st: Stats, mirror: boolean): string {
     `| Wipeouts | ${pct(st.wipeouts, st.games)} | |`,
     `| Sudden deaths | ${pct(st.suddenDeaths, st.games)} | |`,
     `| Mean final stacks, ${a} / ${b} | ${mean(st.stacksA).toFixed(1)} / ${mean(st.stacksB).toFixed(1)} | |`,
+    `| Mean pickups, ${a} / ${b} | ${mean(st.pickupsA).toFixed(2)} / ${mean(st.pickupsB).toFixed(2)} | |`,
+    `| Side with more pickups wins | ${pct(st.pickupLeadWins, st.pickupLeadGames)} of ${st.pickupLeadGames} games | |`,
     `| Sim time per match | ${(st.ms / st.games).toFixed(2)} ms | |`,
     '',
     '| Margin | Games | Share |',

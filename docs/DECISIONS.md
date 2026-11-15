@@ -2,6 +2,19 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-15: Phase 2, after the first fun-gate play test
+
+Yousuf's feedback: matches felt too random because of Ricochet's beam, which made it hard to see whether inputs mattered. He suggested temporary upgrades during a match. His choices: beam sweeps only on redirect; pickups grabbed by steering; Redirect (5 s) as the input.
+
+- **Ricochet's beam sweeps only after a redirect.** Old: it swung after every wall bounce and clash, so bounce luck decided the biggest swings. New: bounces and clashes snap it straight behind with no sweep; a redirect starts a swing that sweeps until the beam trails again. Result: Ricochet's redirect is worth +47 to +50 points over not redirecting, and aiming well (against random aim) is worth +11 to +35. Without redirects Ricochet now loses almost every game, so a Ricochet rival in rounds 1–3 (no redirects, 5.4) will be weak; revisit in Phase 3.
+- **In-match pickups added** (new, not in the brief): Surge, Blast, Charge and Shield, defined in `src/content/pickups.ts`.
+  - The first spawns at 3 s, then one every 6 s at a seeded cell centre away from both primaries. At most 2 are on the map, and each lasts 10 s.
+  - Only primary runners grab them, so steering decides who gets them.
+  - Pickups are temporary and in-match; Mods (Phase 3) stay permanent for a run.
+  - In mirror matches the side with more pickups wins 50–62% of games.
+- **Input settled on Redirect (5 s).** Redirect+ and Hold to boost are removed, along with their code. No input stays for watching, assist and rivals in rounds 1–3. The redirect rules stay configurable for Mods.
+- **Rival AI:** scores the cells a Ricochet swing would sweep (weight 0.4), and races for pickups worth 24 cells minus 1 per 70 units of distance. These weights bring Ricochet vs Splitter to 49.9% with both sides redirecting.
+
 ## 2026-11-15: Phase 2
 
 - **Overtime surge removed.** Old (5.3): "in the last 10 seconds, capture radius effects and Core triggers are amplified". The lab (both sides on the rival heuristic) showed that it does not help tension: the final lead change already comes at about 38 s, and early-decided matches were unchanged. It also skews balance: doubling hit triggers feeds Splitter's late explosion, and Ricochet fell from about 50% to 25–29%. 5.3 says to remove a tool that is not needed. The urgent timer and audio in the last 10 s stay, as presentation only.

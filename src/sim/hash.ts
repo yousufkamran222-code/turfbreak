@@ -45,16 +45,29 @@ export function hashWorld(world: World): number {
     h.u32(r.cell);
     h.f64(r.bx);
     h.f64(r.by);
+    h.byte(r.swinging ? 1 : 0);
   }
   for (const s of world.sides) {
     h.u32(s.hits);
     h.u32(s.captures);
     h.f64(s.stacks);
     h.u32(s.overflow);
+    h.u32(s.charges);
+    h.u32(s.chargeSteps);
+    h.u32(s.surgeSteps);
+    h.u32(s.shieldSteps);
+    h.u32(s.pickups);
     for (const k of ['speed', 'bodyRadius', 'captureRadius', 'beamLength'] as const) {
       h.f64(s.stats[k].add);
       h.f64(s.stats[k].mul);
     }
+  }
+  h.u32(world.pickups.length);
+  for (const p of world.pickups) {
+    h.u32(p.id);
+    h.u32(p.def);
+    h.f64(p.x);
+    h.f64(p.y);
   }
   const rs = world.rng.getState();
   h.u32(rs.a);

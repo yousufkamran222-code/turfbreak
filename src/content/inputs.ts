@@ -1,11 +1,13 @@
-import type { InputMode, RedirectRules } from '../sim/input';
+import type { InputMode } from '../sim/input';
 
-/** The Phase 2 input candidates, compared behind a debug switch. */
+/**
+ * Input choices on the debug screen. Phase 2's fun gate settled on Redirect;
+ * No input remains for comparison and for watching.
+ */
 export interface InputVariant {
   id: string;
   name: string;
   mode: InputMode;
-  redirect?: Partial<RedirectRules>;
   /** One-line prompt shown five seconds in until the player first uses it. */
   prompt: string | null;
   description: string;
@@ -17,22 +19,7 @@ export const inputVariants: readonly InputVariant[] = [
     name: 'Redirect',
     mode: 'redirect',
     prompt: 'Tap to redirect',
-    description: 'Tap to aim your runner at that spot. 5 s cooldown.',
-  },
-  {
-    id: 'redirect-plus',
-    name: 'Redirect+',
-    mode: 'redirect',
-    redirect: { cooldownSeconds: 3, countsAsHit: true },
-    prompt: 'Tap to redirect',
-    description: 'Tap to aim your runner. 3 s cooldown, and each redirect counts as a hit for your Core.',
-  },
-  {
-    id: 'boost',
-    name: 'Hold to boost',
-    mode: 'boost',
-    prompt: 'Hold to boost',
-    description: 'Hold anywhere to speed up while the meter lasts.',
+    description: 'Tap to aim your runner at that spot. 5 s cooldown. Steer into pickups; Ricochet sweeps its beam on every redirect.',
   },
   {
     id: 'none',
