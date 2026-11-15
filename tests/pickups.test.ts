@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pickups } from '../src/content/pickups';
 import { tuning } from '../src/content/tuning';
 import { stepWorld } from '../src/sim/step';
-import { createWorld, type World } from '../src/sim/world';
+import { addRunner, createWorld, type World } from '../src/sim/world';
 import { blank, clearRunners, place } from './helpers';
 
 const SPS = tuning.sim.stepsPerSecond;
@@ -68,14 +68,23 @@ describe('pickups', () => {
     }
   });
 
-  it('Charge makes the redirect ready again', () => {
+  it('Charge makes the ultimate ready again', () => {
     const w = createWorld({ seed: 2, cores: [blank, blank], pickups: only('charge') });
-    w.sides[0].charges = 0;
-    w.sides[0].chargeSteps = 200;
+    w.sides[0].ultimates = 0;
     const r = w.runners[0]!;
     w.pickups.push({ id: 99, def: 0, x: r.x + r.dx * 5, y: r.y + r.dy * 5, expiresStep: 10_000 });
     stepWorld(w);
-    expect(w.sides[0].charges).toBe(1);
+    expect(w.sides[0].ultimates).toBe(1);
+  });
+
+  it('can be grabbed by any runner, not only the primary', () => {
+    const w = createWorld({ seed: 2, cores: [blank, blank], pickups: only('surge') });
+    clearRunners(w);
+    place(w, 0, 100, 100, 1, 0);
+    addRunner(w, 0, false, 600, 600, 1, 0, { radiusMul: 0.7, speedMul: 0.7 });
+    w.pickups.push({ id: 99, def: 0, x: 607, y: 600, expiresStep: 10_000 });
+    stepWorld(w);
+    expect(w.sides[0].pickups).toBe(1);
   });
 
   it('Shield stops the enemy taking your cells', () => {

@@ -10,10 +10,11 @@ export interface MatchResult {
   leadChanges: number;
   lastLeadChangeStep: number;
   maxShareFirstHalf: number;
+  maxShareFirstHalfSide: SideIndex | -1;
   stacks: [number, number];
   runners: [number, number];
   hits: [number, number];
-  redirects: [number, number];
+  ultimates: [number, number];
   pickups: [number, number];
 }
 
@@ -27,10 +28,11 @@ export function summarize(world: World): MatchResult {
     leadChanges: world.leadChanges,
     lastLeadChangeStep: world.lastLeadChangeStep,
     maxShareFirstHalf: world.maxShareFirstHalf,
+    maxShareFirstHalfSide: world.maxShareFirstHalfSide,
     stacks: [world.sides[0].stacks, world.sides[1].stacks],
     runners: [world.sides[0].runnerCount, world.sides[1].runnerCount],
     hits: [world.sides[0].hits, world.sides[1].hits],
-    redirects: [world.sides[0].redirects, world.sides[1].redirects],
+    ultimates: [world.sides[0].ultimatesUsed, world.sides[1].ultimatesUsed],
     pickups: [world.sides[0].pickups, world.sides[1].pickups],
   };
 }

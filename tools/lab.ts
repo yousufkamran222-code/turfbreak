@@ -2,24 +2,27 @@
  * Headless balance lab (MASTER_PROMPT 7.6).
  *
  *   npm run lab -- [--a ricochet --b splitter | --matrix] [--seeds 500] [--start 1]
- *                  [--control none:none] [--variant redirect|none]
- *                  [--no-underdog] [--smoke]
- *                  [--redirect-value] [--tension] [--report docs/balance/name.md]
+ *                  [--control rival:rival] [--no-underdog] [--no-pickups] [--smoke]
+ *                  [--input-value] [--mod-impact] [--tension] [--report docs/balance/name.md]
  *
  * Every seed is played twice with the sides swapped, so side bias cancels out
  * (once for a mirror match with identical controllers, where swapping changes nothing).
  *
  * --control A:B   controllers for side A and side B: none, rival, assist or random.
+ *                 A controller aims the launch and times the ultimate; none does neither.
  * --smoke         checks invariants on every step and exits non-zero on any failure.
- * --redirect-value  side A plays with no input, random input (redirect only) and the rival
- *                 heuristic against side B with none, on the same seeds.
- * --tension       compares the underdog boost on and off, with both sides using the rival heuristic.
+ * --input-value   side A with no input, random input and the rival heuristic against
+ *                 side B with the rival heuristic, on the same seeds.
+ * --mod-impact    each Mod at level 1 and 3 added to side A, against the same Core with no
+ *                 Mods; both sides on the rival heuristic. Reports the win-rate change.
+ * --tension       the underdog boost on and off, both sides on the rival heuristic.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { coreById, cores } from '../src/content/cores';
-import { inputVariantById, type InputVariant } from '../src/content/inputs';
+import { mods } from '../src/content/mods';
 import { tuning } from '../src/content/tuning';
+import type { ModPick } from '../src/sim/abilities';
 import type { ControllerSpec } from '../src/sim/input';
 import { checkInvariants } from '../src/sim/invariants';
 import { runMatch } from '../src/sim/match';
@@ -36,9 +39,10 @@ interface Args {
   smoke: boolean;
   matrix: boolean;
   control: [ControlName, ControlName];
-  variant: InputVariant;
   underdog: boolean;
-  redirectValue: boolean;
+  pickups: boolean;
+  inputValue: boolean;
+  modImpact: boolean;
   tension: boolean;
 }
 
@@ -58,10 +62,11 @@ function parseArgs(argv: string[]): Args {
     report: null,
     smoke: false,
     matrix: false,
-    control: ['none', 'none'],
-    variant: inputVariantById('redirect'),
+    control: ['rival', 'rival'],
     underdog: true,
-    redirectValue: false,
+    pickups: true,
+    inputValue: false,
+    modImpact: false,
     tension: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -70,7 +75,9 @@ function parseArgs(argv: string[]): Args {
     if (k === '--smoke') args.smoke = true;
     else if (k === '--matrix') args.matrix = true;
     else if (k === '--no-underdog') args.underdog = false;
-    else if (k === '--redirect-value') args.redirectValue = true;
+    else if (k === '--no-pickups') args.pickups = false;
+    else if (k === '--input-value') args.inputValue = true;
+    else if (k === '--mod-impact') args.modImpact = true;
     else if (k === '--tension') args.tension = true;
     else if (v !== undefined) {
       if (k === '--a') args.a = v;
@@ -79,7 +86,6 @@ function parseArgs(argv: string[]): Args {
       else if (k === '--start') args.start = Number(v);
       else if (k === '--report') args.report = v;
       else if (k === '--control') args.control = parseControl(v);
-      else if (k === '--variant') args.variant = inputVariantById(v);
       else continue;
       i++;
     }
@@ -100,8 +106,13 @@ function setUnderdog(on: boolean): void {
   (tuning.tension as { underdogMax: number }).underdogMax = on ? defaultUnderdogMax : 0;
 }
 
+interface Side {
+  core: string;
+  control: ControlName;
+  mods: readonly ModPick[];
+}
+
 interface Stats {
-  label: string;
   games: number;
   winsA: number;
   side0Wins: number;
@@ -113,10 +124,8 @@ interface Stats {
   suddenDeaths: number;
   stacksA: number[];
   stacksB: number[];
-  redirectsA: number[];
   pickupsA: number[];
   pickupsB: number[];
-  /** Games where one side got more pickups, and how many of those it won. */
   pickupLeadGames: number;
   pickupLeadWins: number;
   ms: number;
@@ -124,9 +133,8 @@ interface Stats {
 
 const sps = tuning.sim.stepsPerSecond;
 
-function play(a: string, b: string, control: [ControlName, ControlName], args: Args, label: string): Stats {
+function play(A: Side, B: Side, args: Args): Stats {
   const st: Stats = {
-    label,
     games: 0,
     winsA: 0,
     side0Wins: 0,
@@ -138,7 +146,6 @@ function play(a: string, b: string, control: [ControlName, ControlName], args: A
     suddenDeaths: 0,
     stacksA: [],
     stacksB: [],
-    redirectsA: [],
     pickupsA: [],
     pickupsB: [],
     pickupLeadGames: 0,
@@ -146,26 +153,34 @@ function play(a: string, b: string, control: [ControlName, ControlName], args: A
     ms: 0,
   };
   const check = args.smoke ? (w: World) => checkInvariants(w) : undefined;
-  const mirror = a === b && control[0] === control[1];
+  const mirror = A.core === B.core && A.control === B.control && A.mods.length === 0 && B.mods.length === 0;
   const t0 = performance.now();
   for (let seed = args.start; seed < args.start + args.seeds; seed++) {
     for (const swap of mirror ? [false] : [false, true]) {
-      const cs = swap ? ([coreById(b), coreById(a)] as const) : ([coreById(a), coreById(b)] as const);
-      const ctrl = swap ? ([controller(control[1]), controller(control[0])] as const) : ([controller(control[0]), controller(control[1])] as const);
-      const r = runMatch({ seed, cores: cs, controllers: ctrl, inputMode: args.variant.mode }, check);
+      const [s0, s1] = swap ? [B, A] : [A, B];
+      const r = runMatch(
+        {
+          seed,
+          cores: [coreById(s0.core), coreById(s1.core)],
+          controllers: [controller(s0.control), controller(s1.control)],
+          mods: [s0.mods, s1.mods],
+          ...(args.pickups ? {} : { pickups: [] }),
+        },
+        check,
+      );
       const sideA = swap ? 1 : 0;
       st.games++;
       if (r.winner === sideA) st.winsA++;
       if (r.winner === 0) st.side0Wins++;
       st.leadChanges.push(r.leadChanges);
       st.lastLeadChange.push(r.lastLeadChangeStep / sps);
-      if (r.maxShareFirstHalf >= tuning.match.decidedShare) st.decidedEarly++;
+      // Decided early: a side passed the share before half time and went on to win.
+      if (r.maxShareFirstHalf >= tuning.match.decidedShare && r.winner === r.maxShareFirstHalfSide) st.decidedEarly++;
       st.margins.push(Math.abs(r.counts[0] - r.counts[1]));
       if (r.reason === 'wipeout') st.wipeouts++;
       if (r.reason === 'suddenDeath') st.suddenDeaths++;
       st.stacksA.push(r.stacks[sideA]);
       st.stacksB.push(r.stacks[1 - sideA]!);
-      st.redirectsA.push(r.redirects[sideA]);
       st.pickupsA.push(r.pickups[sideA]);
       st.pickupsB.push(r.pickups[1 - sideA]!);
       if (r.pickups[0] !== r.pickups[1]) {
@@ -180,12 +195,13 @@ function play(a: string, b: string, control: [ControlName, ControlName], args: A
 
 const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
 const pct = (n: number, d: number): string => `${((100 * n) / Math.max(1, d)).toFixed(1)}%`;
+const pts = (x: number): string => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)} pts`;
 function quantile(xs: number[], q: number): number {
   const s = [...xs].sort((x, y) => x - y);
   return s[Math.min(s.length - 1, Math.floor(q * s.length))] ?? 0;
 }
 
-function describe(a: string, b: string, st: Stats, mirror: boolean): string {
+function describe(a: string, b: string, label: string, st: Stats, mirror: boolean): string {
   const edges = [0, 5, 10, 20, 40, 80, Infinity];
   const buckets = edges.slice(0, -1).map((lo, i) => {
     const hi = edges[i + 1]!;
@@ -193,7 +209,7 @@ function describe(a: string, b: string, st: Stats, mirror: boolean): string {
     return `| ${lo}–${hi === Infinity ? '∞' : hi - 1} | ${n} | ${pct(n, st.games)} |`;
   });
   return [
-    `## ${a} vs ${b}${st.label ? ` (${st.label})` : ''}`,
+    `## ${a} vs ${b} (${label})`,
     '',
     `| Metric | Value | Target |`,
     `| --- | --- | --- |`,
@@ -204,7 +220,7 @@ function describe(a: string, b: string, st: Stats, mirror: boolean): string {
     ...(mirror ? [] : [`| Side 0 win rate (bias check) | ${pct(st.side0Wins, st.games)} | ~50% |`]),
     `| Mean lead changes (hysteresis ${tuning.tension.leadHysteresis}) | ${mean(st.leadChanges).toFixed(2)} | ≥ 2 |`,
     `| Median time of final lead change | ${quantile(st.lastLeadChange, 0.5).toFixed(1)} s | late |`,
-    `| Decided before half time (one side ≥ ${tuning.match.decidedShare * 100}%) | ${pct(st.decidedEarly, st.games)} | < 15% |`,
+    `| Decided before half time (passed ${tuning.match.decidedShare * 100}% before half time and won) | ${pct(st.decidedEarly, st.games)} | < 15% |`,
     `| Mean margin (cells) | ${mean(st.margins).toFixed(1)} | |`,
     `| Wipeouts | ${pct(st.wipeouts, st.games)} | |`,
     `| Sudden deaths | ${pct(st.suddenDeaths, st.games)} | |`,
@@ -224,28 +240,49 @@ function pairings(args: Args): [string, string][] {
   return args.matrix ? cores.flatMap((x, i) => cores.slice(i).map((y) => [x.id, y.id] as [string, string])) : [[args.a, args.b]];
 }
 
-/** Win rate of side A with each redirect controller against side B with none. */
-function redirectValue(args: Args): string {
+/** What launch aim plus ultimate timing are worth: side A's controller varies, side B is the rival. */
+function inputValue(args: Args): string {
   const rows: string[] = [
-    `## Input value: ${args.variant.name}`,
+    '## Input value (launch aim + ultimate)',
     '',
-    'Side A uses the controller shown; side B never uses the input. Same seeds, both sides played.',
+    'Side A uses the controller shown; side B is the rival heuristic. "None" never aims or fires its ultimate.',
     '',
-    '| Pairing | No input | Random aim | Heuristic | Heuristic gain | Target gain |',
+    '| Pairing | None | Random | Heuristic | Heuristic vs none | Heuristic vs random |',
     '| --- | --- | --- | --- | --- | --- |',
   ];
   for (const [a, b] of pairings(args)) {
     const rate = (c: ControlName): number => {
-      const st = play(a, b, [c, 'none'], args, '');
+      const st = play({ core: a, control: c, mods: [] }, { core: b, control: 'rival', mods: [] }, args);
       return st.winsA / st.games;
     };
     const none = rate('none');
-    const random = args.variant.mode === 'redirect' ? rate('random') : NaN;
-    const rival = rate('rival');
-    const gain = (rival - none) * 100;
-    rows.push(
-      `| ${a} vs ${b} | ${(none * 100).toFixed(1)}% | ${Number.isNaN(random) ? '–' : `${(random * 100).toFixed(1)}%`} | ${(rival * 100).toFixed(1)}% | ${gain >= 0 ? '+' : ''}${gain.toFixed(1)} pts | +10 to +20 pts |`,
-    );
+    const random = rate('random');
+    const heur = rate('rival');
+    rows.push(`| ${a} vs ${b} | ${(none * 100).toFixed(1)}% | ${(random * 100).toFixed(1)}% | ${(heur * 100).toFixed(1)}% | ${pts(heur - none)} | ${pts(heur - random)} |`);
+  }
+  rows.push('');
+  return rows.join('\n');
+}
+
+/** Each Mod's effect on win rate when added to a Core facing the same Core without Mods. */
+function modImpact(args: Args): string {
+  const rows: string[] = [
+    '## Mod impact',
+    '',
+    'Side A has the Mod; side B is the same Core with none. Both use the rival heuristic. 50% means no effect.',
+    '',
+    `| Mod | Rarity | ${cores.map((c) => `${c.name} L1 | ${c.name} L3`).join(' | ')} |`,
+    `| --- | --- | ${cores.map(() => '--- | ---').join(' | ')} |`,
+  ];
+  for (const m of mods) {
+    const cells: string[] = [];
+    for (const c of cores) {
+      for (const level of [1, 3]) {
+        const st = play({ core: c.id, control: 'rival', mods: [{ mod: m, level }] }, { core: c.id, control: 'rival', mods: [] }, args);
+        cells.push(pct(st.winsA, st.games));
+      }
+    }
+    rows.push(`| ${m.name} | ${m.rarity} | ${cells.join(' | ')} |`);
   }
   rows.push('');
   return rows.join('\n');
@@ -253,25 +290,20 @@ function redirectValue(args: Args): string {
 
 /** The tension metrics with the underdog boost on and off, both sides on the rival heuristic. */
 function tension(args: Args): string {
-  const variants: [string, boolean][] = [
-    ['underdog off', false],
-    ['underdog on', true],
-  ];
   const rows: string[] = [
     '## Tension tools',
     '',
     'Both sides use the rival heuristic. Same seeds for every variant.',
     '',
-    '| Pairing | Tools | Win rate A | Lead changes | Final lead change (median) | Decided early | Mean margin |',
+    '| Pairing | Underdog | Win rate A | Lead changes | Final lead change (median) | Decided early | Mean margin |',
     '| --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const [a, b] of pairings(args)) {
-    for (const [name, u] of variants) {
-      setUnderdog(u);
-      const st = play(a, b, ['rival', 'rival'], args, name);
-      const mirror = a === b;
+    for (const on of [false, true]) {
+      setUnderdog(on);
+      const st = play({ core: a, control: 'rival', mods: [] }, { core: b, control: 'rival', mods: [] }, args);
       rows.push(
-        `| ${a} vs ${b} | ${name} | ${mirror ? '–' : pct(st.winsA, st.games)} | ${mean(st.leadChanges).toFixed(2)} | ${quantile(st.lastLeadChange, 0.5).toFixed(1)} s | ${pct(st.decidedEarly, st.games)} | ${mean(st.margins).toFixed(1)} |`,
+        `| ${a} vs ${b} | ${on ? 'on' : 'off'} | ${a === b ? '–' : pct(st.winsA, st.games)} | ${mean(st.leadChanges).toFixed(2)} | ${quantile(st.lastLeadChange, 0.5).toFixed(1)} s | ${pct(st.decidedEarly, st.games)} | ${mean(st.margins).toFixed(1)} |`,
       );
     }
   }
@@ -284,12 +316,14 @@ function main(): void {
   const args = parseArgs(process.argv.slice(2));
   setUnderdog(args.underdog);
   const sections: string[] = [];
-  if (args.redirectValue) sections.push(redirectValue(args));
+  if (args.inputValue) sections.push(inputValue(args));
+  if (args.modImpact) sections.push(modImpact(args));
   if (args.tension) sections.push(tension(args));
-  if (!args.redirectValue && !args.tension) {
+  if (!args.inputValue && !args.modImpact && !args.tension) {
     for (const [a, b] of pairings(args)) {
-      const st = play(a, b, args.control, args, args.control.join(':') === 'none:none' ? '' : `controls ${args.control.join(':')}`);
-      sections.push(describe(a, b, st, a === b && args.control[0] === args.control[1]));
+      const A: Side = { core: a, control: args.control[0], mods: [] };
+      const B: Side = { core: b, control: args.control[1], mods: [] };
+      sections.push(describe(a, b, `controls ${args.control.join(':')}`, play(A, B, args), a === b && args.control[0] === args.control[1]));
     }
   }
   for (const s of sections) console.log(s);
@@ -297,7 +331,7 @@ function main(): void {
     const header = [
       '# Balance report',
       '',
-      `Seeds ${args.start}–${args.start + args.seeds - 1}. Input ${args.variant.name}. Underdog boost ${args.underdog ? 'on' : 'off'}. Generated by \`npm run lab\`.`,
+      `Seeds ${args.start}–${args.start + args.seeds - 1}. Underdog boost ${args.underdog ? 'on' : 'off'}. Pickups ${args.pickups ? 'on' : 'off'}. Generated by \`npm run lab\`.`,
       '',
     ].join('\n');
     mkdirSync(dirname(args.report), { recursive: true });

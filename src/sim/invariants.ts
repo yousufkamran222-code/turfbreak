@@ -30,6 +30,10 @@ export function checkInvariants(world: World): void {
       throw new Error(`step ${world.step}: runner ${r.id} is outside the arena at ${r.x}, ${r.y}`);
     }
     if (Math.abs(Math.hypot(r.dx, r.dy) - 1) > 1e-6) throw new Error(`step ${world.step}: runner ${r.id} heading is not unit`);
+    // Movement is capped by maxSpeed; a clash can then push a runner apart by up to two body radii.
+    const moved = Math.hypot(r.x - r.lastX, r.y - r.lastY);
+    const limit = tuning.runner.maxSpeed * world.dt + 4 * statValue(world.sides[r.side], 'bodyRadius') + 1e-6;
+    if (moved > limit) throw new Error(`step ${world.step}: runner ${r.id} moved ${moved} in one step`);
   }
   for (const s of [0, 1] as const) {
     if (per[s]! > tuning.runner.maxPerSide) throw new Error(`step ${world.step}: side ${s} has ${per[s]} runners`);

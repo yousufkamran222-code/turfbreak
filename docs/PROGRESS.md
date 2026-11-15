@@ -2,63 +2,58 @@
 
 ## Phase 2: agency (fun gate, 2026-11-15)
 
-**Status: second play test.** After the first test Yousuf chose Redirect (5 s) and asked for less randomness and in-match upgrades. Both are built. The gate stays open until he has played this build; Phase 3 must not start before then.
+**Status: third play test, on the Gauntlet.** Two rounds of play testing rejected the tap-to-redirect ("doesn't feel satisfying or fun at all"). Yousuf chose a mostly-watched match with a launch aim and one ultimate, pickups that stay and also become Mods, and a satisfaction pass plus a mini draft. Phase 3 must not start until he says matches are satisfying and drafting is fun.
 
-### Done
-- **Feedback fixes (round 1).** Rematch remounts the match. The setup screen starts on a random seed. Phase 1 always opened on seed 1 (a Ricochet win), which with the broken Rematch explains "Ricochet always wins". The lab shows 50.4% from side A and 49.2% from side B.
-- **Input in the sim.** Timestamped redirect records, an applied-input log, replays from seed, Cores and log (tested to the same hash), charges and cooldown, an `onRedirect` hook, and per-match redirect rules for future Mods.
-- **Input choice.** Redirect (5 s) is the input. Redirect+ and Hold to boost were tried and removed (see DECISIONS). No input stays on the debug switch for watching. Assist plays your redirect with a mediocre heuristic.
-- **Feedback changes (round 2):**
-  - **Ricochet's beam** sweeps only after a redirect; bounces snap it.
-  - **Four pickups:** Surge, Blast, Charge and Shield. They spawn from the seed and only main runners grab them. They show as pulsing orbs with glyphs, a spawn ring, a collect burst, a Blast shockwave, effect chips under each name, and a sound.
-- **Rival controller.** Bouncing 1,100-unit ray, sweep scoring for beams, pickup racing, reaction delay, aim error, a separate PRNG stream per side.
-- **Tension.** Underdog boost (6% max); overtime surge measured and removed; lead changes with 3-cell hysteresis.
-- **Juice and audio.**
-  - Visual: staggered capture pops, pooled sparks, shake, hit-stop, rings for taps, spawns and blasts, a pulsing cooldown ring, a gauge bar, the "Tap to redirect" prompt at 5 s, and a territory-bar thump on lead changes.
-  - Audio: synthesised hit runs, ticks, clash, trigger, redirect and pickup sounds, a final-10 s tick, stingers, and a mute toggle.
-  - Speed: 1x/2x.
-- **Lab.** `--control`, `--variant`, `--redirect-value`, `--tension`, and pickup stats (mean pickups; whether the side with more pickups wins). CI's smoke test runs both rivals redirecting.
+### Done (this round)
+- **Inputs.** The redirect and all its code are removed. Now: drag to aim the launch, with a dotted preview through two bounces and an auto-launch after 4 s. Then one ultimate per match from a big button.
+- **Ultimates.** Ricochet Spin (one full beam circle, reach up to 300). Splitter Burst (one split per 3 owned, at least one). Charge pickups restore the ultimate.
+- **Rival AI.** Aims its launch by scoring headings. Fires its ultimate on a per-Core value (enemy cells in the Spin disc; splits owned), or 6 s before the buzzer. Auto-play uses the same code.
+- **Ricochet's beam** swings back to trailing after every hit, as Core behaviour, and snags pickups.
+- **Pickups:** any runner grabs them.
+- **Mods, first version (9):** Overclock, Growth Spurt, Chain Reaction, Afterburner, Shockwave, Bulwark, Magnet, Encore, Head Start. Three levels each, slot-ordered hooks, interval hooks, and Mod chips in the HUD that flash when a Mod fires.
+- **Gauntlet:** a five-round mini draft from the menu. Pick a Core, draft 1 of 3 (or skip) before each match, then a run summary. Rivals get a random Core and the same number of random picks. A debug quick match stays below it.
+- **Satisfaction pass:**
+  - Ultimate: slow motion, flash, banner, shockwave and whoosh.
+  - Capture streaks: climbing ticks and ×10/×25/×50/×100 callouts with chords and shake.
+  - Music: a generated beat that intensifies in the final 10 s.
+  - Match end: a freeze, confetti and a result drop-in.
+  - Also: pickup and blast rings and a launch sound.
+- **Bug fixes the lab found:**
+  - Speed could run away to about 10¹⁷ (speed → hits → overflow → speed). Speed is now capped at 1,800 and overflow is additive.
+  - Fast runners skipped cells. Captures now sample along the whole step.
+  - Match-start events (Head Start) were dropped before the HUD saw them.
 
 ### How it was verified
-- **Tests:** `npm run check` passes all 61. New tests cover:
-  - redirect, cooldown, replays from the log, rival cooldown, underdog cap, lead hysteresis
-  - the beam snaps on a bounce and swings only after a redirect
-  - pickups spawn on schedule, cap at 2, are identical per seed and can be switched off
-  - each pickup's effect (Surge speed, Blast radius, Charge refill, Shield blocking captures)
-- **Headless Chromium at 390×844:**
-  - the prompt appears, a tap redirects, and the gauge recharges
-  - pickups show on the map; a rival grab shows its SURGE chip
-  - 2x works, and Rematch restarts
-  - no console errors
-- **Lab** (`docs/balance/phase2-core-matrix.md`, 1,000 seeds, both sides on the rival heuristic):
+- **Tests:** `npm run check` passes all 73. New tests cover:
+  - launch and ultimate inputs, replays from the log, and rival launch plus ultimate before the deadline
+  - Spin, Burst, once-per-match ultimates, beam snap and swing
+  - any-runner pickups, Charge restoring the ultimate
+  - a content matrix (every Mod × level × Core runs a full match with invariants on every step, and its trigger fires)
+  - Mod hook order, Encore, interval Mods, the draft (distinct offers, level-ups, full build only offers upgrades, rival builds)
+  - the speed cap, and match-start events
+- **Headless Chromium at 390×844.** I played the Gauntlet from the menu through Core pick, draft, aiming (preview drawn), launch, ultimate (banner, callouts), match end, result and the next round's draft. No console errors. Screenshots reviewed.
+- **Lab** (`docs/balance/phase2b-*.md`, both sides on the rival heuristic):
 
   | Pairing | Result | Target |
   | --- | --- | --- |
-  | Ricochet vs Splitter | Ricochet wins 49.9% | 40–60% |
-  | Ricochet mirror | Side 0 wins 49.5% | 48–52% |
-  | Splitter mirror | Side 0 wins 47.8% | 48–52% |
+  | Ricochet vs Splitter (1,000 seeds) | Ricochet wins 46.5% | 40–60% |
+  | Ricochet mirror | Side 0 wins 50.3% | 48–52% |
+  | Splitter mirror | Side 0 wins 50.9% | 48–52% |
 
-  Ricochet vs Splitter, other metrics: decided early 6.1%, lead changes 8.0.
-- **Redirect value** (`docs/balance/phase2-redirect.md`, 300 seeds, against a side with no input):
+- **Mod impact** (Mod on one side of a mirror, 150 seeds):
+  - Every common Mod at level 1 is within +17 points (target under +25).
+  - **Overclock** is the standout "broken" pick: Splitter L1 87%, L3 96%; Ricochet 68–81%. It is uncommon now, so it will show up less often.
+  - Strong for Splitter: Encore (rare) 69–81%, Afterburner 60–75%, Magnet 64–75%.
 
-  | Pairing | Heuristic vs none | Aim value (heuristic vs random) | Target |
-  | --- | --- | --- | --- |
-  | Ricochet vs Ricochet | +49.8 pts | +11 pts | +10 to +20 |
-  | Ricochet vs Splitter | +47.3 pts | +34 pts | +10 to +20 |
-  | Splitter vs Splitter | +3.5 pts | +16 pts | +10 to +20 |
-
-### What the numbers say
-- **Ricochet** is now an input Core. Taps decide its sweeps, and where you aim matters a lot. Its redirect value is well above the brief's +10–20 target; that is a deliberate trade for agency. It also means a Ricochet that never redirects (rival rounds 1–3, No input) almost always loses.
-- **Splitter** still gains little from redirecting (+3.5). Its pickups help (in mirrors the pickup leader wins 62%), but most of its power is in splits, which you can't steer. If Yousuf finds Splitter passive, cheap options are letting splits grab pickups, or a Mod or base rule where a redirect also turns splits.
-
-### Known issues and stubs
-- Underdog boost and controllers are tuned against the lab heuristic only.
-- Juice intensity is a single tuning value; reduce-motion is Phase 5.
-- The phone layout still has empty space above the arena (Phase 3 adds Mod slots).
-- Events still allocate one object each.
+### Known issues (for the play test and Phase 4)
+- **Too many matches decided early.** Ricochet vs Splitter is decided before half time (passed 70% and won) in 30% of matches, against a target of 15%. Ricochet mirrors are at 17.5%. Ricochet's beam sweeps build early leads that hold. Splitter mirrors are fine at 2.3%.
+- **Launch aim and ultimate timing barely change outcomes in the lab:** −3 to +3 points for Ricochet. That's consistent with the new design (choices live in the draft), but it means the match itself is a spectacle, not a skill test. Yousuf's play decides whether that is right.
+- **Splitter's ultimate timing:** the rival's Burst timing is worse than random (firing at 3 splits). Firing at 1 split made the rival stronger but tipped Ricochet to 35%, so the later timing stays.
+- **Not built yet:** reroll, hearts, bosses, saves, Ascension. These are Phase 3.
+- **Not verified:** frame rate on a real phone with the new effects, and the beat on Android audio.
 
 ### Next
-Fun gate, second round. Yousuf plays this build: is Ricochet less random, do taps matter, are pickups fun, does Splitter feel passive? Then Phase 3: the run.
+Fun gate, third round: Yousuf plays the Gauntlet several times. Are matches satisfying to watch, is drafting fun, which Mods feel great and which are dead? Then Phase 3, the full run, built on the Gauntlet.
 
 ## Phase 1: the simulation (2026-11-15)
 

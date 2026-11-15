@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tuning } from '../src/content/tuning';
-import { queueInput } from '../src/sim/input';
+import { applyUltimate } from '../src/sim/input';
 import { stepWorld } from '../src/sim/step';
 import { createWorld, statValue } from '../src/sim/world';
 import { blank, ricochet, splitter } from './helpers';
@@ -25,11 +25,12 @@ describe('Ricochet', () => {
   it('captures enemy cells along its beam', () => {
     const w = createWorld({ seed: 2, cores: [ricochet, blank] });
     w.sides[0].stats.beamLength.add = 600;
-    // A fresh beam trails back into home territory; aim it at the enemy and mark it mid-swing.
+    // A fresh beam trails back into home territory; aim it at the enemy and spin it a little.
     const r = w.runners[0]!;
     r.bx = r.dx;
     r.by = r.dy;
-    r.swinging = true;
+    r.spinLeft = 0.2;
+    r.spinReach = 600;
     const before = w.counts[0];
     stepWorld(w);
     const beamCaptures = w.events.filter((e) => e.type === 'CellCaptured' && e.cause === 'beam').length;
@@ -37,45 +38,59 @@ describe('Ricochet', () => {
     expect(w.counts[0]).toBeGreaterThan(before);
   });
 
-  it('swings its beam to trail behind after a turn', () => {
-    const w = createWorld({ seed: 3, cores: [ricochet, blank] });
-    const r = w.runners[0]!;
-    r.dx = -r.dx;
-    r.dy = -r.dy;
-    for (let i = 0; i < 2 * tuning.sim.stepsPerSecond; i++) {
-      stepWorld(w);
-      if (w.phase === 'ended') break;
-    }
-    // Within two seconds the beam points straight back again, or has just been knocked off by a new hit.
-    const dot = r.bx * -r.dx + r.by * -r.dy;
-    expect(dot).toBeGreaterThan(-1);
-    expect(Math.hypot(r.bx, r.by)).toBeCloseTo(1, 9);
-  });
 });
 
-describe('beam swing', () => {
-  it('snaps straight behind on a wall bounce, without sweeping', () => {
-    const w = createWorld({ seed: 3, cores: [ricochet, blank], pickups: [] });
+describe('beam', () => {
+  it('snaps straight behind when nothing makes it swing', () => {
+    const w = createWorld({ seed: 3, cores: [blank, blank], pickups: [] });
     const r = w.runners[0]!;
-    r.x = 30;
-    r.dx = -1;
-    r.dy = 0;
+    w.sides[0].stats.beamLength.add = 300;
     r.bx = 1;
     r.by = 0;
-    for (let i = 0; i < 10; i++) stepWorld(w);
-    expect(r.swinging).toBe(false);
+    stepWorld(w);
     expect(r.bx).toBeCloseTo(-r.dx, 9);
     expect(r.by).toBeCloseTo(-r.dy, 9);
   });
 
-  it('swings over several steps after a redirect, then trails', () => {
+  it('swings over several steps after a Ricochet hit, then trails', () => {
     const w = createWorld({ seed: 3, cores: [ricochet, blank], pickups: [] });
     const r = w.runners[0]!;
-    queueInput(w, { side: 0, type: 'redirect', x: r.x - r.dx * 300, y: r.y - r.dy * 300 });
+    r.bx = r.dx;
+    r.by = r.dy;
+    ricochet.hooks.onHit?.(w.contexts[0], { runner: r, kind: 'wall' });
     stepWorld(w);
     expect(r.swinging).toBe(true);
     for (let i = 0; i < 60 && r.swinging; i++) stepWorld(w);
     expect(r.swinging).toBe(false);
+  });
+});
+
+describe('ultimates', () => {
+  it('Ricochet Spin turns the beam through full circles', () => {
+    const w = createWorld({ seed: 3, cores: [ricochet, blank], pickups: [] });
+    const r = w.runners[0]!;
+    applyUltimate(w, 0);
+    expect(r.spinLeft).toBeCloseTo(ricochet.values.spinTurns! * 2 * Math.PI, 9);
+    for (let i = 0; i < 600 && r.spinLeft > 0; i++) stepWorld(w);
+    expect(r.spinLeft).toBe(0);
+  });
+
+  it('Splitter Burst spawns one split per few owned, at least one', () => {
+    const per = splitter.values.burstPer!;
+    const w = createWorld({ seed: 3, cores: [splitter, blank], pickups: [] });
+    applyUltimate(w, 0);
+    expect(w.sides[0].runnerCount).toBe(2);
+    const big = createWorld({ seed: 3, cores: [splitter, blank], pickups: [] });
+    const r = big.runners[0]!;
+    for (let i = 0; i < per * 3; i++) big.contexts[0].spawnRunner(r, { radiusMul: 0.7, speedMul: 0.7 });
+    applyUltimate(big, 0);
+    expect(big.sides[0].runnerCount).toBe(1 + per * 3 + 3);
+  });
+
+  it('fire once per match', () => {
+    const w = createWorld({ seed: 3, cores: [splitter, blank], pickups: [] });
+    expect(applyUltimate(w, 0)).toBe(true);
+    expect(applyUltimate(w, 0)).toBe(false);
   });
 });
 
@@ -95,6 +110,6 @@ describe('Splitter', () => {
     const w = hitPrimary(1, [splitter, blank], every * (cap + 4));
     expect(w.sides[0].runnerCount).toBe(cap);
     expect(w.sides[0].overflow).toBe(5);
-    expect(w.sides[0].stats.speed.mul).toBeCloseTo((1 + tuning.runner.overflowSpeed) ** 5, 9);
+    expect(w.sides[0].stats.speed.add).toBeCloseTo(5 * tuning.runner.speed * tuning.runner.overflowSpeed, 9);
   });
 });

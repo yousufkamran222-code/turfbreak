@@ -1,7 +1,7 @@
 /**
- * In-match pickups (Phase 2 iteration, from Yousuf's play feedback). A side's
- * primary runner grabs one by touching it; the effect is short. Steering to
- * pickups is what gives the redirect something concrete to aim at.
+ * In-match pickups (from Yousuf's Phase 2 play feedback). Any runner grabs one
+ * by touching it; the effect is short. They add moments to watch, and their
+ * effects also exist as draftable Mods (Afterburner, Shockwave, Bulwark, Magnet).
  */
 export type PickupEffect =
   | { kind: 'surge'; speedMul: number; seconds: number }
@@ -45,9 +45,9 @@ export const pickups: readonly PickupDef[] = [
     name: 'Charge',
     glyph: '↻',
     color: '#5ee6ff',
-    weight: 2,
+    weight: 1,
     effect: { kind: 'charge' },
-    description: 'Your redirect is ready again at once.',
+    description: 'Your ultimate is ready again.',
   },
   {
     id: 'shield',

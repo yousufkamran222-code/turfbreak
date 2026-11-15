@@ -1,6 +1,6 @@
 import type { SideIndex } from './world';
 
-export type CaptureCause = 'runner' | 'beam' | 'radius' | 'pickup';
+export type CaptureCause = 'runner' | 'beam' | 'radius' | 'pickup' | 'ability';
 export type EndReason = 'time' | 'suddenDeath' | 'wipeout';
 
 /** Typed events the sim emits for the renderer, audio and HUD (MASTER_PROMPT 4.3 rule 2). */
@@ -13,7 +13,9 @@ export type SimEvent =
   | { type: 'RunnerOverflow'; step: number; side: SideIndex; overflow: number }
   | { type: 'LeadChange'; step: number; leader: SideIndex }
   | { type: 'SuddenDeath'; step: number }
-  | { type: 'Redirect'; step: number; side: SideIndex; runner: number; x: number; y: number }
+  | { type: 'ModTriggered'; step: number; side: SideIndex; slot: number }
+  | { type: 'UltimateFired'; step: number; side: SideIndex; echo: boolean }
+  | { type: 'Blast'; step: number; side: SideIndex; x: number; y: number; radius: number }
   | { type: 'PickupSpawned'; step: number; id: number; kind: string; x: number; y: number }
   | { type: 'PickupCollected'; step: number; id: number; kind: string; side: SideIndex; x: number; y: number }
   | { type: 'PickupExpired'; step: number; id: number }

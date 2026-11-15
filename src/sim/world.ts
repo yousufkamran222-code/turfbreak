@@ -1,8 +1,9 @@
 import { tuning } from '../content/tuning';
-import type { AbilityContext, CoreDef, HitInfo, SpawnOptions } from './abilities';
+import type { AbilityContext, CoreDef, HitInfo, ModPick, SpawnOptions } from './abilities';
 import { generateArena, findCell, type Arena } from './arena';
 import type { EndReason, SimEvent } from './events';
-import type { ControllerSpec, InputMode, InputRecord, RedirectRules } from './input';
+import { primaryOf, type ControllerSpec, type InputRecord } from './input';
+import { capture, hit } from './step';
 import { pickups as allPickups, type PickupDef } from '../content/pickups';
 import { Rng, Stream } from './rng';
 import { rotateSmall } from './vec';
@@ -23,9 +24,16 @@ export interface Runner {
   speedMul: number;
   /** Last cell under the runner, used as the lookup hint. */
   cell: number;
-  /** Unit direction of the beam. It trails straight behind, and swings (sweeping) only after a redirect. */
+  /** Position at the start of this step, so a fast runner captures along its whole path. */
+  lastX: number;
+  lastY: number;
+  /** Unit direction of the beam. It trails straight behind, except while an ultimate spins it. */
   bx: number;
   by: number;
+  /** Radians of beam spin left (Ricochet's ultimate), and the beam's reach while spinning. */
+  spinLeft: number;
+  spinReach: number;
+  /** The beam is swinging back to trailing at the swing rate, sweeping as it goes. */
   swinging: boolean;
 }
 
@@ -49,17 +57,18 @@ export interface SideState {
   overflow: number;
   /** Times the Core's signature fired this match. */
   triggers: number;
-  /** Redirect charges ready now, and steps until the next one returns. */
-  charges: number;
-  chargeSteps: number;
-  redirects: number;
-  /** Steps of post-redirect dash left, and redirects waiting to count as hits. */
-  dashSteps: number;
-  pendingRedirectHits: number;
-  /** Combined speed factor from underdog boost, redirect dash and Surge, recomputed each step. */
+  /** Mods in slot order; hooks fire Core first, then these in order. */
+  readonly mods: readonly ModPick[];
+  /** Whether the launch has been aimed, and ultimates ready and used. */
+  launched: boolean;
+  ultimates: number;
+  ultimatesUsed: number;
+  /** Combined speed factor from underdog boost and Surge, recomputed each step. */
   speedFactor: number;
-  /** Controller bookkeeping: step at which it may act next, or -1 when waiting for a charge. */
-  aiReadyStep: number;
+  /** Pickup grab distance multiplier (Magnet). */
+  pickupReachMul: number;
+  /** Random controller: the step it picked to fire its ultimate, or -1. */
+  aiUltimateStep: number;
   /** Pickup effects: steps left of each, and the surge speed multiplier. */
   surgeSteps: number;
   surgeMul: number;
@@ -79,14 +88,12 @@ export interface Pickup {
 export interface MatchConfig {
   seed: number;
   cores: readonly [CoreDef, CoreDef];
-  /** Which player input the match uses. Defaults to redirect. */
-  inputMode?: InputMode;
   /** A built-in controller per side, or null for none (a human, a replay or no input). */
   controllers?: readonly [ControllerSpec | null, ControllerSpec | null];
   /** Pre-recorded inputs, for replays. */
   inputs?: readonly InputRecord[];
-  /** Overrides for the redirect rules (Phase 2 compares variants). */
-  redirect?: Partial<RedirectRules>;
+  /** Mods per side, in slot order. */
+  mods?: readonly [readonly ModPick[], readonly ModPick[]];
   /** Pickup definitions in play; an empty list turns pickups off. Defaults to the full set. */
   pickups?: readonly PickupDef[];
   /** False in headless lab runs, so no event objects are created. */
@@ -105,14 +112,16 @@ export interface World {
   readonly dt: number;
   readonly matchSteps: number;
   readonly recordEvents: boolean;
-  readonly inputMode: InputMode;
-  readonly redirectRules: RedirectRules;
   readonly controllers: readonly [ControllerSpec | null, ControllerSpec | null];
   readonly aiRngs: [Rng, Rng];
   /** Inputs waiting for their step, in step order. */
   readonly pendingInputs: InputRecord[];
   /** Every input applied, in order: everything a replay needs besides seed and builds. */
   readonly inputLog: InputRecord[];
+  /** Delayed ultimate echoes (Encore), in step order. */
+  readonly scheduled: { step: number; side: SideIndex }[];
+  /** Index of the Mod whose hook is running, or -1 for the Core (routes `triggered`). */
+  currentMod: number;
   readonly pickupDefs: readonly PickupDef[];
   /** Pickups on the map, oldest first. */
   readonly pickups: Pickup[];
@@ -127,8 +136,9 @@ export interface World {
   leader: SideIndex | -1;
   leadChanges: number;
   lastLeadChangeStep: number;
-  /** Largest share of the map either side held before half time (lab tension metric). */
+  /** Largest share of the map either side held before half time, and which side (lab tension metric). */
   maxShareFirstHalf: number;
+  maxShareFirstHalfSide: SideIndex | -1;
   events: SimEvent[];
   nextRunnerId: number;
   readonly contexts: [AbilityContext, AbilityContext];
@@ -174,8 +184,12 @@ export function addRunner(
     radiusMul: opts.radiusMul,
     speedMul: opts.speedMul,
     cell: findCell(world.arena, x, y, 0),
+    lastX: x,
+    lastY: y,
     bx: -dx,
     by: -dy,
+    spinLeft: 0,
+    spinReach: 0,
     swinging: false,
   };
   world.runners.push(r);
@@ -208,12 +222,62 @@ function makeContext(world: () => World, side: SideIndex): AbilityContext {
     setCounter(i, v) {
       st().counters[i] = v;
     },
+    primary: () => primaryOf(world(), side),
+    captureCell(cell) {
+      capture(world(), cell, side, 'ability');
+    },
+    blast(x, y, radius) {
+      const w = world();
+      const c = w.arena.centroids;
+      const r2 = radius * radius;
+      for (let i = 0; i < w.arena.cellCount; i++) {
+        const dx = c[i * 2]! - x;
+        const dy = c[i * 2 + 1]! - y;
+        if (dx * dx + dy * dy <= r2) capture(w, i, side, 'ability');
+      }
+      emit(w, { type: 'Blast', step: w.step, side, x, y, radius });
+    },
+    shield(seconds) {
+      const s = st();
+      s.shieldSteps = Math.max(s.shieldSteps, Math.round(seconds * tuning.sim.stepsPerSecond));
+    },
+    surge(speedMul, seconds) {
+      const s = st();
+      s.surgeSteps = Math.max(s.surgeSteps, Math.round(seconds * tuning.sim.stepsPerSecond));
+      s.surgeMul = Math.max(s.surgeMul, speedMul);
+    },
+    setPickupReach(mul) {
+      const s = st();
+      s.pickupReachMul = Math.max(s.pickupReachMul, mul);
+    },
+    addHits(n) {
+      const r = primaryOf(world(), side);
+      if (!r) return;
+      const mod = world().currentMod;
+      for (let i = 0; i < n; i++) hit(world(), r, 'wall');
+      world().currentMod = mod;
+    },
+    swingBeam() {
+      const r = primaryOf(world(), side);
+      if (r) r.swinging = true;
+    },
+    spinBeam(turns, maxReach) {
+      const r = primaryOf(world(), side);
+      if (!r) return;
+      r.spinLeft += turns * 2 * Math.PI;
+      r.spinReach = maxReach;
+    },
+    echoUltimate(seconds) {
+      const w = world();
+      w.scheduled.push({ step: w.step + Math.max(1, Math.round(seconds * tuning.sim.stepsPerSecond)), side });
+      w.scheduled.sort((a, b) => a.step - b.step || a.side - b.side);
+    },
     spawnRunner(from, opts) {
       const w = world();
       const s = st();
       if (s.runnerCount >= tuning.runner.maxPerSide) {
         s.overflow++;
-        s.stats.speed.mul *= 1 + tuning.runner.overflowSpeed;
+        s.stats.speed.add += tuning.runner.speed * tuning.runner.overflowSpeed;
         emit(w, { type: 'RunnerOverflow', step: w.step, side, overflow: s.overflow });
         return null;
       }
@@ -223,6 +287,10 @@ function makeContext(world: () => World, side: SideIndex): AbilityContext {
     triggered() {
       const w = world();
       const s = st();
+      if (w.currentMod >= 0) {
+        emit(w, { type: 'ModTriggered', step: w.step, side, slot: w.currentMod });
+        return;
+      }
       s.triggers++;
       emit(w, { type: 'CoreTriggered', step: w.step, side, stacks: s.stacks });
     },
@@ -257,13 +325,13 @@ export function createWorld(cfg: MatchConfig): World {
     runnerCount: 0,
     overflow: 0,
     triggers: 0,
-    charges: { ...tuning.input.redirect, ...cfg.redirect }.maxCharges,
-    chargeSteps: 0,
-    redirects: 0,
-    dashSteps: 0,
-    pendingRedirectHits: 0,
+    mods: cfg.mods?.[i] ?? [],
+    launched: false,
+    ultimates: 1,
+    ultimatesUsed: 0,
     speedFactor: 1,
-    aiReadyStep: -1,
+    pickupReachMul: 1,
+    aiUltimateStep: -1,
     surgeSteps: 0,
     surgeMul: 1,
     shieldSteps: 0,
@@ -280,12 +348,12 @@ export function createWorld(cfg: MatchConfig): World {
     dt: 1 / tuning.sim.stepsPerSecond,
     matchSteps: Math.round(tuning.match.durationSeconds * tuning.sim.stepsPerSecond),
     recordEvents: cfg.recordEvents ?? true,
-    inputMode: cfg.inputMode ?? 'redirect',
-    redirectRules: { ...tuning.input.redirect, ...cfg.redirect },
     controllers: cfg.controllers ?? [null, null],
     aiRngs: [new Rng(cfg.seed, Stream.ai0), new Rng(cfg.seed, Stream.ai1)],
     pendingInputs: [...(cfg.inputs ?? [])].sort((a, b) => a.step - b.step),
     inputLog: [],
+    scheduled: [],
+    currentMod: -1,
     pickupDefs: cfg.pickups ?? allPickups,
     pickups: [],
     nextPickupId: 0,
@@ -299,6 +367,7 @@ export function createWorld(cfg: MatchConfig): World {
     leadChanges: 0,
     lastLeadChangeStep: 0,
     maxShareFirstHalf: 0.5,
+    maxShareFirstHalfSide: -1,
     events: [],
     nextRunnerId: 0,
     contexts: [makeContext(get, 0), makeContext(get, 1)],
@@ -323,6 +392,15 @@ export function createWorld(cfg: MatchConfig): World {
     addRunner(world, s, true, sx / count, sy / count, dir.dx, dir.dy, { radiusMul: 1, speedMul: 1 });
   }
 
-  for (const s of [0, 1] as const) world.sides[s].core.hooks.onMatchStart?.(world.contexts[s]);
+  for (const s of [0, 1] as const) {
+    const sd = world.sides[s];
+    world.currentMod = -1;
+    sd.core.hooks.onMatchStart?.(world.contexts[s]);
+    sd.mods.forEach((m, i) => {
+      world.currentMod = i;
+      m.mod.hooks.onMatchStart?.(world.contexts[s], m.level);
+    });
+    world.currentMod = -1;
+  }
   return world;
 }

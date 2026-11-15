@@ -1,5 +1,5 @@
 import { tuning } from '../content/tuning';
-import { primaryOf } from './input';
+import { beamLength } from './step';
 import { emit, statValue, type SideIndex, type World } from './world';
 
 type CaptureFn = (world: World, cell: number, side: SideIndex) => void;
@@ -18,7 +18,7 @@ function pickWeighted(world: World): number {
   return defs.length - 1;
 }
 
-/** Spawn at a random cell centre away from both primaries. Falls back to the last try. */
+/** Spawn at a random cell centre away from both primaries, so nobody gets one for free. Falls back to the last try. */
 function spawn(world: World): void {
   const a = world.arena;
   const minD = tuning.pickups.minDistanceFromRunner;
@@ -64,8 +64,7 @@ function apply(world: World, side: SideIndex, defIndex: number, x: number, y: nu
       break;
     }
     case 'charge':
-      st.charges = Math.max(st.charges, 1);
-      st.aiReadyStep = -1;
+      st.ultimates = Math.max(st.ultimates, 1);
       break;
     case 'shield':
       st.shieldSteps = Math.round(e.seconds * SPS);
@@ -73,9 +72,30 @@ function apply(world: World, side: SideIndex, defIndex: number, x: number, y: nu
   }
 }
 
+/** A beam that passes over a pickup snags it (Ricochet's laser grabs orbs). */
+function grabWithBeams(world: World, capture: CaptureFn): void {
+  for (const r of world.runners) {
+    if (!r.primary || world.pickups.length === 0) continue;
+    const length = beamLength(world, r);
+    if (length <= 0) continue;
+    for (let i = 0; i < world.pickups.length; i++) {
+      const p = world.pickups[i]!;
+      // Distance from the pickup to the beam segment.
+      const t = Math.max(0, Math.min(length, (p.x - r.x) * r.bx + (p.y - r.y) * r.by));
+      const dx = r.x + r.bx * t - p.x;
+      const dy = r.y + r.by * t - p.y;
+      if (dx * dx + dy * dy > tuning.pickups.radius * tuning.pickups.radius) continue;
+      world.pickups.splice(i, 1);
+      i--;
+      emit(world, { type: 'PickupCollected', step: world.step, id: p.id, kind: world.pickupDefs[p.def]!.id, side: r.side, x: p.x, y: p.y });
+      apply(world, r.side, p.def, p.x, p.y, capture);
+    }
+  }
+}
+
 /**
- * Tick effect timers, expire old pickups, spawn new ones, and let primaries
- * grab any they touch. Grab order alternates by step, like captures.
+ * Tick effect timers, expire old pickups, spawn new ones, and let any runner
+ * grab one it touches. Grab order alternates by step, like captures.
  */
 export function updatePickups(world: World, capture: CaptureFn): void {
   for (const s of [0, 1] as const) {
@@ -97,11 +117,14 @@ export function updatePickups(world: World, capture: CaptureFn): void {
     world.nextPickupStep = world.step + Math.round(tuning.pickups.everySeconds * SPS);
   }
 
-  const order: readonly SideIndex[] = world.step % 2 === 0 ? [0, 1] : [1, 0];
-  for (const s of order) {
-    const r = primaryOf(world, s);
-    if (!r) continue;
-    const reach = tuning.pickups.radius + statValue(world.sides[s], 'bodyRadius');
+  if (world.pickups.length === 0) return;
+  grabWithBeams(world, capture);
+  const rs = world.runners;
+  const n = rs.length;
+  for (let k = 0; k < n && world.pickups.length > 0; k++) {
+    const r = rs[world.step % 2 === 0 ? k : n - 1 - k]!;
+    const st = world.sides[r.side];
+    const reach = (tuning.pickups.radius + statValue(st, 'bodyRadius') * r.radiusMul) * st.pickupReachMul;
     for (let i = 0; i < world.pickups.length; i++) {
       const p = world.pickups[i]!;
       const dx = r.x - p.x;
@@ -109,8 +132,8 @@ export function updatePickups(world: World, capture: CaptureFn): void {
       if (dx * dx + dy * dy > reach * reach) continue;
       world.pickups.splice(i, 1);
       i--;
-      emit(world, { type: 'PickupCollected', step: world.step, id: p.id, kind: world.pickupDefs[p.def]!.id, side: s, x: p.x, y: p.y });
-      apply(world, s, p.def, p.x, p.y, capture);
+      emit(world, { type: 'PickupCollected', step: world.step, id: p.id, kind: world.pickupDefs[p.def]!.id, side: r.side, x: p.x, y: p.y });
+      apply(world, r.side, p.def, p.x, p.y, capture);
     }
   }
 }

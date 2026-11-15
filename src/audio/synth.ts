@@ -20,6 +20,11 @@ export class Synth {
   private readonly hitIndex = [0, 0];
   private readonly lastHit = [-Infinity, -Infinity];
   private readonly lastTick = [-Infinity, -Infinity];
+  private beatTimer: ReturnType<typeof setInterval> | null = null;
+  private nextBeatTime = 0;
+  private beatIndex = 0;
+  private intense = false;
+  private noiseBuffer: AudioBuffer | null = null;
 
   /** Call from a user gesture (a tap or click handler). */
   unlock(): void {
@@ -102,9 +107,113 @@ export class Synth {
     this.tone(midiToHz(base + 19), 0.25, 'sine', 0.08, 0.04);
   }
 
-  redirect(): void {
-    this.tone(660, 0.08, 'sine', 0.12);
-    this.tone(990, 0.1, 'sine', 0.1, 0.05);
+  /** A capture inside a streak: ticks climb the side's scale as the streak grows. */
+  streakTick(side: SideIndex, streak: number): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (now - this.lastTick[side]! < tuning.audio.captureTickSeconds) return;
+    this.lastTick[side] = now;
+    const scale = SCALES[side]!;
+    const step = Math.min(scale.length - 1, Math.floor(streak / 3));
+    this.tone(midiToHz(scale[step]! + 12), 0.05, 'sine', 0.05 + Math.min(0.06, streak * 0.002));
+  }
+
+  /** A streak milestone (x10, x25...): a bright rising chord. */
+  milestone(side: SideIndex, tier: number): void {
+    const base = SCALES[side]![0]! + 12 * Math.min(1, tier);
+    [0, 4, 7, 12].forEach((n, i) => this.tone(midiToHz(base + n), 0.35, 'triangle', 0.12, i * 0.04));
+  }
+
+  private noise(dur: number, gain: number, from: number, to: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.master || this.muted || ctx.state !== 'running') return;
+    if (!this.noiseBuffer) {
+      this.noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = this.noiseBuffer.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.2;
+    const t = ctx.currentTime;
+    f.frequency.setValueAtTime(from, t);
+    f.frequency.exponentialRampToValueAtTime(to, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(this.master);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+
+  /** The ultimate: a rising whoosh and a big chord. */
+  ultimate(side: SideIndex): void {
+    this.noise(0.7, 0.35, 300, 4000);
+    const base = SCALES[side]![0]!;
+    [0, 7, 12, 16, 19].forEach((n, i) => this.tone(midiToHz(base + n), 0.6, 'sawtooth', 0.06, 0.05 + i * 0.03));
+  }
+
+  blast(): void {
+    this.noise(0.4, 0.3, 1200, 120);
+    this.tone(60, 0.35, 'sine', 0.25);
+  }
+
+  launch(): void {
+    this.noise(0.25, 0.2, 600, 2400);
+    this.tone(523, 0.15, 'triangle', 0.15);
+  }
+
+  /** Start the generated beat. `setIntense` adds layers in the final seconds. */
+  startBeat(): void {
+    if (!this.ctx || this.beatTimer) return;
+    this.nextBeatTime = this.ctx.currentTime + 0.05;
+    this.beatIndex = 0;
+    this.intense = false;
+    // Look-ahead scheduling: queue the next 100 ms of sixteenth notes every 25 ms.
+    this.beatTimer = setInterval(() => this.scheduleBeat(), 25);
+  }
+
+  stopBeat(): void {
+    if (this.beatTimer) clearInterval(this.beatTimer);
+    this.beatTimer = null;
+  }
+
+  setIntense(on: boolean): void {
+    this.intense = on;
+  }
+
+  private scheduleBeat(): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running') return;
+    const sixteenth = 60 / tuning.audio.beatBpm / 4;
+    while (this.nextBeatTime < ctx.currentTime + 0.1) {
+      const delay = Math.max(0, this.nextBeatTime - ctx.currentTime);
+      const i = this.beatIndex % 16;
+      const v = tuning.audio.beatVolume;
+      if (i % 4 === 0) this.kick(delay, v);
+      if (i % 2 === 0 || this.intense) this.tone(9000, 0.03, 'square', 0.012 * v * (i % 4 === 2 ? 2 : 1), delay);
+      if (this.intense && (i === 4 || i === 12)) this.tone(200, 0.12, 'triangle', 0.18 * v, delay);
+      if (this.intense && i % 4 === 0) this.tone(midiToHz(45 + (i === 8 ? 5 : 0)), 0.2, 'sawtooth', 0.08 * v, delay);
+      this.nextBeatTime += sixteenth;
+      this.beatIndex++;
+    }
+  }
+
+  private kick(delay: number, v: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.master || this.muted) return;
+    const t = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    g.gain.setValueAtTime(0.5 * v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    osc.connect(g).connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.2);
   }
 
   pickup(blast: boolean): void {
