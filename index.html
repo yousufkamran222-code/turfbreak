@@ -3,23 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#0d0f14" />
+    <meta name="theme-color" content="#0b0d12" />
+    <style>html,body{margin:0;background:#0b0d12}</style>
     <title>Turfbreak</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #0d0f14; overflow: hidden; }
-      body { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
-      canvas { display: block; }
-      #build-info {
-        position: fixed; left: 0; right: 0;
-        top: calc(env(safe-area-inset-top, 0px) + 12px);
-        text-align: center; color: #8890a6;
-        font: 13px system-ui, sans-serif; pointer-events: none;
-      }
-    </style>
   </head>
   <body>
-    <canvas id="arena"></canvas>
-    <div id="build-info"></div>
-    <script type="module" src="./src/main.ts"></script>
+    <div id="app"></div>
+    <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

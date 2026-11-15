@@ -2,6 +2,18 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-15: Phase 1
+
+- **Ricochet's beam swings instead of tracing the path.** Old (5.6): "trails a beam behind it that captures cells it sweeps". First build: the beam followed the runner's exact path. The lab showed that this only re-covers cells the runner has just taken, and Ricochet won 0% against Splitter at every value tried. New: a straight beam trails behind the runner, and after each turn it swings back to trailing at `beam.swingRate` (6 rad/s), sweeping an arc. Area per bounce grows with the square of beam length, and the swing is very visible. It is still "a beam behind it that captures what it sweeps"; this is the reading the lab supports.
+- **Phase 1 Core values.** Ricochet: beam starts at 60 and grows 38 per hit (brief: 12). Splitter: a split every 7 hits (brief: 4), with splits at 0.7 size and 0.7 speed. Reason: at the brief's values Splitter's splits fed its own growth and took the map by 20–25 s every game. With these values Ricochet wins 49.8% over 2,000 games, 12–13% of matches are decided before half time, and the median final lead change comes at 38.5 s. Report: `docs/balance/phase1-core-matrix.md`.
+- **Splits' hits count toward the next split.** The brief does not say. Counting them is what makes Splitter "slow then explosive"; the higher threshold keeps the explosion late.
+- **Capture order alternates by step.** Runners resolve captures front to back on even steps and back to front on odd ones, so neither side always gets the last word on a contested cell.
+- **No trigonometry in the sim, enforced by ESLint.** Headings turn with `rotateSmall` (a Taylor series renormalised with `sqrt`) and random directions come from rejection sampling. This makes rule 4.3.4 a lint error rather than a guideline. Arena generation (d3-delaunay) uses only `+ - * /` and robust predicates.
+- **Mirror matches recolour side B.** When both sides run the same Core, side B uses the Core's alternate colour and name (for example SCARLET RICOCHET), so the sides are never told apart by shape alone.
+- **`@typescript-eslint/no-non-null-assertion` is off.** It conflicts with `noUncheckedIndexedAccess` in hot typed-array loops, where `!` is the honest choice and `?? 0` would add a branch to every read.
+- **Added `tsx` (dev only)** to run the TypeScript lab tool without a build step. **Added Preact, `@preact/signals` and `d3-delaunay`** as planned in 4.1, now that the screens and arena exist.
+- **Lead-change count is noisy.** It counts every flip of the strict leader, so near-ties inflate it (10–17 per match). It still meets "≥ 2", but Phase 2 should add hysteresis before using it to tune the tension tools.
+
 ## 2026-11-15: Phase 0
 
 - **Application ID.** Set to `com.yousufkamran.turfbreak`, confirmed by Yousuf. It cannot change after publishing.

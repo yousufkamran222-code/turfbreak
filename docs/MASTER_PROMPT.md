@@ -62,6 +62,7 @@ Use these to settle any design question this document does not answer.
 | Menus and HUD | DOM with Preact and `@preact/signals` | Responsive layout, text and accessibility come free; about 5 KB | Vanilla DOM |
 | Voronoi | `d3-delaunay` | Small, fast, gives polygons, neighbours and point lookup | Hand-rolled jittered grid |
 | Tests | Vitest; Playwright for screenshots | Sim runs in Node; screenshots let you check the UI yourself | None |
+| Tool runner | `tsx` (dev only) | Runs the TypeScript lab and tools without a build step | Node's own type stripping, once imports carry extensions |
 | Android wrapper | Capacitor 8 or newer | Wraps the same web build; standard Gradle project; targets SDK 36 | Trusted Web Activity |
 | Runtime | Node 22, JDK 21 in CI | Required by Capacitor 8 | Match whatever the current Capacitor needs |
 | Package manager | npm with a committed lockfile | Zero setup in cloud sessions and CI | pnpm |
@@ -104,7 +105,7 @@ Keep runtime dependencies to this list. Adding one needs a line in `docs/DECISIO
 1. **The simulation is pure.** Code in `src/sim` never touches the DOM, timers, `Date`, `Math.random` or any global. It takes a match config, a seed and an input list, and advances in fixed steps of 1/60 s. It runs unchanged in Node.
 2. **One-way data flow.** The sim owns the state. The renderer, audio and UI read state and consume a typed event queue (`CellCaptured`, `WallBounce`, `Clash`, `CoreTriggered`, `ModTriggered`, `RunnerSpawned`, `MatchEnded` and so on). They never write to the sim. Player input enters only as timestamped input records.
 3. **Determinism.** Same version, seed, builds and inputs must produce the same state hash at every step. Use one seeded PRNG (for example sfc32 or mulberry32) with separate streams for arena generation, simulation and cosmetics. Iterate arrays in fixed order; never iterate a `Set` or object keys in sim code. Cosmetic randomness (particles, shake) uses its own stream and never affects the sim.
-4. **Determinism caveat.** Floating-point results of `Math.sin` and similar can differ between JavaScript engines. Chrome and Android WebView share V8, so treat cross-engine equality as a goal, not a guarantee. Keep trigonometry out of hot sim paths where a vector operation does the job, and stamp replay codes with the game version.
+4. **Determinism caveat.** Floating-point results of `Math.sin` and similar can differ between JavaScript engines. Chrome and Android WebView share V8, so treat cross-engine equality as a goal, not a guarantee. Sim code uses no trigonometry at all (ESLint enforces this): turn headings with `rotateSmall` and draw random directions by rejection sampling. Stamp replay codes with the game version.
 5. **Content is data.** A Core or Mod is a declarative object: id, name, text template, rarity, tags, per-level values, and hooks written against the ability API in section 5.5. Adding a Mod must not require touching the sim loop.
 6. **Render is interpolated.** Fixed sim step, variable render rate, with interpolation between the last two sim states. Speed-up runs more sim steps per frame.
 7. **Saves are versioned.** One JSON document with a `version` field, migrations in order, and a corrupt-save fallback that never crashes the game. All storage goes through the platform adapter.
@@ -194,8 +195,8 @@ Each Core is a colour, a shape, a name and one signature ability. The HUD shows 
 
 | Core | Colour | Signature | Stack shown |
 | --- | --- | --- | --- |
-| Ricochet | Crimson | Trails a beam behind it that captures cells it sweeps; the beam grows 12 units per hit | Beam length |
-| Splitter | Magenta | Every 4 hits, spawns a smaller, permanent split runner | Splits |
+| Ricochet | Crimson | Trails a straight beam behind it; after each turn the beam swings back to trailing, capturing every cell it sweeps. The beam grows 38 units per hit (starts at 60) | Beam length |
+| Splitter | Magenta | Every 7 hits (splits' hits count too), spawns a smaller, slower, permanent split runner | Splits |
 | Pulse | Cyan | Every 5 hits, emits a shockwave that captures in a radius; the radius grows each pulse | Pulse radius |
 | Bloom | Green | Cells it captures spread to one adjacent enemy cell after 2 seconds; the spread chance grows per capture | Spread chance |
 | Fortress | Gold | Every 10 captures, its whole territory gains a shield point | Shields granted |

@@ -59,6 +59,22 @@ export class Rng {
     return Math.floor(this.next() * n);
   }
 
+  /**
+   * Uniform random unit vector by rejection sampling, so no trigonometry is
+   * involved and the result is identical on every JavaScript engine.
+   */
+  unitVector(): { x: number; y: number } {
+    for (;;) {
+      const x = this.range(-1, 1);
+      const y = this.range(-1, 1);
+      const d = x * x + y * y;
+      if (d > 1e-4 && d <= 1) {
+        const inv = 1 / Math.sqrt(d);
+        return { x: x * inv, y: y * inv };
+      }
+    }
+  }
+
   getState(): RngState {
     return { a: this.a, b: this.b, c: this.c, d: this.d };
   }

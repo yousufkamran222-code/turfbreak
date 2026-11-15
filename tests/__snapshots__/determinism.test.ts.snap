@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`determinism > matches golden final hashes; update them only for a deliberate sim change, and say why in the commit 1`] = `
+[
+  {
+    "counts": [
+      98,
+      84,
+    ],
+    "hash": 2335879936,
+    "seed": 1,
+    "winner": 0,
+  },
+  {
+    "counts": [
+      117,
+      65,
+    ],
+    "hash": 387458440,
+    "seed": 2,
+    "winner": 0,
+  },
+  {
+    "counts": [
+      62,
+      120,
+    ],
+    "hash": 1266011989,
+    "seed": 3,
+    "winner": 1,
+  },
+]
+`;

@@ -25,7 +25,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      # Unit, invariant and determinism tests. The 200-match balance smoke test joins in Phase 1.
+      # Unit, invariant, determinism and golden-hash tests.
       - run: npm test
+      # 100 seeds x 2 sides = 200 headless matches with invariants checked on every step.
+      - run: npm run lab -- --seeds 100 --smoke
       - run: npm run build:web
       - run: npm run check:size

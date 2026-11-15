@@ -1,6 +1,6 @@
 {
   "name": "turfbreak",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "A build-then-watch territory roguelite.",
@@ -19,14 +19,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:size": "node tools/check-size.mjs dist",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "check": "npm run lint && npm run typecheck && npm test",
+    "lab": "tsx tools/lab.ts"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.2",
     "@eslint/js": "^10.0.1",
+    "@types/d3-delaunay": "^6.0.4",
     "@types/node": "^22.20.5",
     "eslint": "^10.15.0",
     "globals": "^17.14.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.2",
     "vite": "^8.3.8",
@@ -38,6 +41,9 @@
     "@capacitor/core": "^8.6.2",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/preferences": "^8.0.1",
-    "@capacitor/share": "^8.0.3"
+    "@capacitor/share": "^8.0.3",
+    "@preact/signals": "^2.11.4",
+    "d3-delaunay": "^6.0.6",
+    "preact": "^11.2.0"
   }
 }
