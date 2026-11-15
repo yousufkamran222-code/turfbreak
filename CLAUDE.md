@@ -12,7 +12,7 @@ Build-then-watch territory roguelite. TypeScript + Vite + Canvas 2D, wrapped for
 - `npm run check`: lint + typecheck + tests (run before every push)
 - `npm run build:web` / `build:crazygames` / `build:android`: build one target into `dist/`
 - `npm run check:size`: bundle budget check against `dist/`
-- `npm run lab -- --a ricochet --b splitter --seeds 500 [--matrix] [--smoke] [--report docs/balance/x.md]`: headless balance lab
+- `npm run lab -- --a ricochet --b splitter --seeds 500 [--matrix] [--control rival:none] [--variant redirect] [--redirect-value] [--tension] [--smoke] [--report docs/balance/x.md]`: headless balance lab (flags documented at the top of `tools/lab.ts`)
 - `npx cap sync android`: copy `dist/` into the Android project (after `build:android`)
 
 ## Rules that are easy to break

@@ -1,5 +1,69 @@
 # Progress
 
+## Phase 2: agency (fun gate, 2026-11-15)
+
+**Status: waiting for Yousuf's input choice.** Phase 3 must not start until he has played at least 20 matches across the variants and chosen one, or rejected them all.
+
+### Done
+- **Feedback fixes.** Rematch now remounts the match: every match gets a fresh key, where Phase 1 keyed by Cores and seed, so a same-seed rematch did nothing. The setup screen starts on a random seed, and "New seed" picks a random one. Phase 1 always opened on seed 1, which Ricochet wins; that, plus the broken Rematch, explains "Ricochet always wins". The lab shows 50.4% from side A and 49.2% from side B over 1,000 seeds.
+- **Input in the sim.** Timestamped input records, an applied-input log, replays from seed, Cores and log (tested to the same hash), redirect charges and cooldown, an `onRedirect` hook, and a redirect-as-hit option.
+- **Four input variants** behind the debug switch on the setup screen: Redirect (5 s), Redirect+ (3 s, counts as a hit), Hold to boost, No input. The rival uses the same input when "Rival uses the input too" is on. "Assist" lets the game play your input with a deliberately mediocre heuristic.
+- **Controllers.** A rival heuristic (bouncing 1,100-unit ray, 16 headings, reaction delay, aim error, separate PRNG stream per side), a random-aim baseline and a boost controller.
+- **Tension tools.** Underdog boost (6% max); overtime surge built, measured and removed; lead changes with 3-cell hysteresis.
+- **Juice.** Staggered capture pops, pooled sparks, trauma shake, hit-stop on primary clashes, a tap marker, and a pulsing cooldown ring around your runner. A cooldown or meter bar sits under the arena. "Tap to redirect" / "Hold to boost" appears at 5 s until first use, and the territory bar thumps on lead changes.
+- **Audio** (WebAudio, no files): per-side pentatonic hit notes that climb, capture ticks, clash, trigger and redirect sounds, a final-10 s tick, a win/lose stinger, a mute toggle, and suspend on pause.
+- **1x/2x speed toggle.**
+- **Lab:** `--control`, `--variant`, `--redirect-value` (none, random-aim and heuristic on the same seeds) and `--tension` (underdog on and off). CI's 200-match smoke test now runs with both rivals redirecting.
+
+### How it was verified
+- `npm run check`: 53 tests pass. New tests cover:
+  - redirect turn, charge and cooldown; ignored in other modes; counts as a hit when set
+  - boost meter drain and refill
+  - underdog boost capped and applied only to the trailing side
+  - replays from the input log, both controller-recorded and queued live
+  - the rival respects its cooldown
+  - lead hysteresis
+- **Headless Chromium at 390×844:**
+  - the prompt appears at 5 s
+  - a tap redirects and the gauge switches to RECHARGING
+  - 2x works
+  - the match ends, and Rematch restarts at 40 s
+  - no console errors
+  - screenshots reviewed: setup, prompt, after the tap, mid-match, result
+- **Lab reports** in `docs/balance/phase2-*.md`, 300 seeds each (core matrix 1,000):
+
+  | Variant | Value vs no input (R mirror / R vs S / S mirror) | Aim value (heuristic vs random) | R vs S when both use it | Decided early |
+  | --- | --- | --- | --- | --- |
+  | Redirect (5 s) | +2.7 / +6.5 / +0.2 | about 0 | 48.8% | 15.8% |
+  | Redirect+ (3 s, hit) | +14.0 / +15.2 / +37.5 | +1 to +3 | 28.5% | 52% |
+  | Hold to boost | +9.3 / +12.2 / +45.7 | n/a | – | – |
+
+  Target value: +10 to +20.
+
+  Core matrix, both sides redirecting with the rival heuristic (1,000 seeds):
+
+  | Pairing | Result | Target |
+  | --- | --- | --- |
+  | Ricochet vs Splitter | Ricochet wins 50.3% | 40–60% |
+  | Ricochet mirror | Side 0 wins 47.3% | 48–52% |
+  | Splitter mirror | Side 0 wins 50.2% | 48–52% |
+
+  Ricochet vs Splitter, other metrics: decided early 15.0% (target under 15%), lead changes 7.6.
+
+### What the numbers say (for the fun gate)
+- **The brief's redirect has too little effect in the lab:** 0 to 7 points against a target of 10 to 20. Where you aim makes almost no difference to the heuristic: random aim scores about the same. Territory is driven mostly by the Cores (beam sweeps, splits), and one runner's path is a small share of it.
+- **Redirect+ and Boost have big value,** but almost none of it comes from aiming; it comes from pressing at all. Both also favour Splitter heavily (hit counting and speed multiply across its splits). Redirect+ pushes early-decided matches to 52%.
+- **A human may aim better than the heuristic.** For example, a player can intercept the rival to bank a clash, or line up a sharp turn so Ricochet's beam sweeps. That is exactly what the play test decides. If none of the variants feels played, the next step is a new input design, not more tuning (see the options in the session report).
+
+### Known issues and stubs
+- Underdog boost and controllers are tuned against the lab heuristic only; real-player numbers come from Yousuf's play.
+- Juice has a single intensity value in `tuning.juice`; the reduce-motion setting is Phase 5.
+- The phone layout still has empty space above the arena (Phase 3 adds Mod slots).
+- Events still allocate one object each (see Phase 1).
+
+### Next
+Fun gate. Yousuf plays at least 20 matches across the four variants and picks one, or none. Then Phase 3: the run.
+
 ## Phase 1: the simulation (2026-11-15)
 
 ### Done

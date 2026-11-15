@@ -1,11 +1,29 @@
 import { tuning } from '../content/tuning';
+import { runControllers } from './ai';
 import { findCell } from './arena';
+import { applyPendingInputs, isBoosting, tickInputState } from './input';
 import type { CaptureCause, EndReason } from './events';
 import { rotateSmall } from './vec';
 import { emit, statValue, type Runner, type SideIndex, type World } from './world';
 
 function other(side: SideIndex): SideIndex {
   return side === 0 ? 1 : 0;
+}
+
+/** Underdog boost and hold-to-boost, once per step per side. */
+function updateSpeedFactors(world: World): void {
+  const n = world.arena.cellCount;
+  for (const s of [0, 1] as const) {
+    const deficit = (world.counts[other(s)] - world.counts[s]) / n;
+    const underdog = deficit > 0 ? 1 + Math.min(tuning.tension.underdogMax, tuning.tension.underdogPerShare * deficit) : 1;
+    const boost = isBoosting(world, s) ? tuning.input.boostMultiplier : 1;
+    const dash = world.sides[s].dashSteps > 0 ? world.redirectRules.dashMul : 1;
+    world.sides[s].speedFactor = underdog * boost * dash;
+  }
+}
+
+export function runnerSpeed(world: World, r: Runner): number {
+  return statValue(world.sides[r.side], 'speed') * r.speedMul * world.sides[r.side].speedFactor;
 }
 
 function endMatch(world: World, winner: SideIndex, reason: EndReason): void {
@@ -29,7 +47,7 @@ function capture(world: World, cell: number, side: SideIndex, cause: CaptureCaus
   if (world.phase === 'suddenDeath') endMatch(world, side, 'suddenDeath');
 }
 
-function hit(world: World, runner: Runner, kind: 'wall' | 'clash'): void {
+function hit(world: World, runner: Runner, kind: 'wall' | 'clash' | 'redirect'): void {
   const st = world.sides[runner.side];
   st.hits++;
   const info = world.hitScratch;
@@ -43,8 +61,7 @@ function radiusOf(world: World, r: Runner): number {
 }
 
 function moveRunner(world: World, r: Runner): void {
-  const st = world.sides[r.side];
-  const speed = statValue(st, 'speed') * r.speedMul;
+  const speed = runnerSpeed(world, r);
   r.x += r.dx * speed * world.dt;
   r.y += r.dy * speed * world.dt;
   const rad = radiusOf(world, r);
@@ -103,8 +120,8 @@ function resolveClashes(world: World, count: number): void {
       // Coincident centres: separate along a fixed axis so the result stays deterministic.
       const nx = d > 1e-9 ? nx0 / d : 1;
       const ny = d > 1e-9 ? ny0 / d : 0;
-      const va = statValue(world.sides[a.side], 'speed') * a.speedMul;
-      const vb = statValue(world.sides[b.side], 'speed') * b.speedMul;
+      const va = runnerSpeed(world, a);
+      const vb = runnerSpeed(world, b);
       const closing = (a.dx * va - b.dx * vb) * nx + (a.dy * va - b.dy * vb) * ny;
       // Push apart either way so runners never stay embedded.
       const push = (reach - d) / 2;
@@ -170,9 +187,14 @@ function swingBeam(r: Runner): void {
   r.by = dir.dy;
 }
 
+/** Current beam length of a runner. Only primaries carry beams. */
+export function beamLength(world: World, r: Runner): number {
+  return r.primary ? statValue(world.sides[r.side], 'beamLength') : 0;
+}
+
 /** Sample along the beam from the runner outward and capture every enemy cell it covers. */
 function captureBeam(world: World, r: Runner): void {
-  const length = statValue(world.sides[r.side], 'beamLength');
+  const length = beamLength(world, r);
   if (length <= 0) return;
   swingBeam(r);
   const spacing = tuning.beam.sampleSpacing;
@@ -189,7 +211,9 @@ function captureBeam(world: World, r: Runner): void {
 
 function updateLead(world: World): void {
   const [a, b] = world.counts;
-  const leader: SideIndex | -1 = a > b ? 0 : b > a ? 1 : world.leader;
+  // A side takes the lead only when ahead by the hysteresis margin, so near-ties do not flicker.
+  const h = world.leader === -1 ? 1 : tuning.tension.leadHysteresis;
+  const leader: SideIndex | -1 = a - b >= h ? 0 : b - a >= h ? 1 : world.leader;
   if (leader !== world.leader) {
     if (world.leader !== -1) {
       world.leadChanges++;
@@ -209,6 +233,18 @@ export function stepWorld(world: World): void {
   if (world.phase === 'ended') return;
   world.events.length = 0;
   world.step++;
+
+  applyPendingInputs(world);
+  runControllers(world);
+  for (const s of [0, 1] as const) {
+    const st = world.sides[s];
+    for (; st.pendingRedirectHits > 0; st.pendingRedirectHits--) {
+      const r = world.runners.find((x) => x.side === s && x.primary);
+      if (r) hit(world, r, 'redirect');
+    }
+  }
+  tickInputState(world);
+  updateSpeedFactors(world);
 
   for (const s of [0, 1] as const) world.sides[s].core.hooks.onStep?.(world.contexts[s]);
 

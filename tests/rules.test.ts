@@ -110,3 +110,31 @@ describe('win rules', () => {
     expect(w.endReason).toBe('time');
   });
 });
+
+describe('lead changes', () => {
+  it('need the hysteresis margin, so near-ties do not count', () => {
+    const w = blankWorld();
+    clearRunners(w);
+    const flip = (from: 0 | 1, n: number) => {
+      for (let i = 0, done = 0; i < w.owner.length && done < n; i++) {
+        if (w.owner[i] !== from) continue;
+        w.owner[i] = from === 0 ? 1 : 0;
+        w.counts[from]--;
+        w.counts[from === 0 ? 1 : 0]++;
+        done++;
+      }
+    };
+    flip(1, 2);
+    stepWorld(w);
+    expect(w.leader).toBe(0);
+    flip(0, 3);
+    stepWorld(w);
+    // Side 1 is ahead by 2, below the margin: side 0 keeps the lead.
+    expect(w.leader).toBe(0);
+    expect(w.leadChanges).toBe(0);
+    flip(0, 1);
+    stepWorld(w);
+    expect(w.leader).toBe(1);
+    expect(w.leadChanges).toBe(1);
+  });
+});

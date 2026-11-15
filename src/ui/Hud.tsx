@@ -15,14 +15,14 @@ function formatStacks(value: number): string {
 }
 
 /** Restart a CSS animation on an element each time `bump` changes. */
-function useFlash(bump: number) {
+function useFlash(bump: number, cls = 'flash') {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el || bump === 0) return;
-    el.classList.remove('flash');
+    el.classList.remove(cls);
     void el.offsetWidth;
-    el.classList.add('flash');
+    el.classList.add(cls);
   }, [bump]);
   return ref;
 }
@@ -46,6 +46,7 @@ function SideCard({ hud, side, core, look }: { hud: HudState; side: SideIndex; c
 
 /** VS header, timer and territory bar. */
 export function Hud({ hud, cores, looks }: Props) {
+  const barRef = useFlash(hud.leadPulse.value, 'thump');
   const a = hud.counts[0].value;
   const b = hud.counts[1].value;
   const share = a + b > 0 ? (a / (a + b)) * 100 : 50;
@@ -59,7 +60,7 @@ export function Hud({ hud, cores, looks }: Props) {
         <div class={`timer ${phase === 'running' && secs <= 10 ? 'urgent' : ''}`}>{timer}</div>
         <SideCard hud={hud} side={1} core={cores[1]} look={looks[1]} />
       </div>
-      <div class="bar" role="img" aria-label={`${a} cells to ${b}`}>
+      <div class="bar" ref={barRef} role="img" aria-label={`${a} cells to ${b}`}>
         <div class="bar-a" style={{ width: `${share}%` }} />
         <div class="bar-half" />
         <span class="bar-count left">{a}</span>

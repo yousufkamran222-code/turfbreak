@@ -5,7 +5,7 @@ export type RunnerShape = 'diamond' | 'hexagon' | 'circle' | 'triangle' | 'squar
 
 export interface HitInfo {
   runner: Runner;
-  kind: 'wall' | 'clash';
+  kind: 'wall' | 'clash' | 'redirect';
 }
 
 export interface SpawnOptions {
@@ -39,6 +39,7 @@ export interface CoreHooks {
   onStep?(ctx: AbilityContext): void;
   onHit?(ctx: AbilityContext, hit: HitInfo): void;
   onCapture?(ctx: AbilityContext, cell: number): void;
+  onRedirect?(ctx: AbilityContext, runner: Runner): void;
 }
 
 export interface CoreDef {

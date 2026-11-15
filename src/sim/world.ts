@@ -2,6 +2,7 @@ import { tuning } from '../content/tuning';
 import type { AbilityContext, CoreDef, HitInfo, SpawnOptions } from './abilities';
 import { generateArena, findCell, type Arena } from './arena';
 import type { EndReason, SimEvent } from './events';
+import type { ControllerSpec, InputMode, InputRecord, RedirectRules } from './input';
 import { Rng, Stream } from './rng';
 import { rotateSmall } from './vec';
 
@@ -46,11 +47,33 @@ export interface SideState {
   overflow: number;
   /** Times the Core's signature fired this match. */
   triggers: number;
+  /** Redirect charges ready now, and steps until the next one returns. */
+  charges: number;
+  chargeSteps: number;
+  redirects: number;
+  /** Steps of post-redirect dash left, and redirects waiting to count as hits. */
+  dashSteps: number;
+  pendingRedirectHits: number;
+  /** Hold-to-boost: whether the input is held, and the meter from 0 to 1. */
+  boostHeld: boolean;
+  boostMeter: number;
+  /** Combined speed factor from underdog boost and hold-to-boost, recomputed each step. */
+  speedFactor: number;
+  /** Controller bookkeeping: step at which it may act next, or -1 when waiting for a charge. */
+  aiReadyStep: number;
 }
 
 export interface MatchConfig {
   seed: number;
   cores: readonly [CoreDef, CoreDef];
+  /** Which player input the match uses. Defaults to redirect. */
+  inputMode?: InputMode;
+  /** A built-in controller per side, or null for none (a human, a replay or no input). */
+  controllers?: readonly [ControllerSpec | null, ControllerSpec | null];
+  /** Pre-recorded inputs, for replays. */
+  inputs?: readonly InputRecord[];
+  /** Overrides for the redirect rules (Phase 2 compares variants). */
+  redirect?: Partial<RedirectRules>;
   /** False in headless lab runs, so no event objects are created. */
   recordEvents?: boolean;
 }
@@ -67,6 +90,14 @@ export interface World {
   readonly dt: number;
   readonly matchSteps: number;
   readonly recordEvents: boolean;
+  readonly inputMode: InputMode;
+  readonly redirectRules: RedirectRules;
+  readonly controllers: readonly [ControllerSpec | null, ControllerSpec | null];
+  readonly aiRngs: [Rng, Rng];
+  /** Inputs waiting for their step, in step order. */
+  readonly pendingInputs: InputRecord[];
+  /** Every input applied, in order: everything a replay needs besides seed and builds. */
+  readonly inputLog: InputRecord[];
   step: number;
   phase: Phase;
   suddenDeathStep: number;
@@ -205,6 +236,15 @@ export function createWorld(cfg: MatchConfig): World {
     runnerCount: 0,
     overflow: 0,
     triggers: 0,
+    charges: { ...tuning.input.redirect, ...cfg.redirect }.maxCharges,
+    chargeSteps: 0,
+    redirects: 0,
+    dashSteps: 0,
+    pendingRedirectHits: 0,
+    boostHeld: false,
+    boostMeter: 1,
+    speedFactor: 1,
+    aiReadyStep: -1,
   });
 
   const world: World = {
@@ -217,6 +257,12 @@ export function createWorld(cfg: MatchConfig): World {
     dt: 1 / tuning.sim.stepsPerSecond,
     matchSteps: Math.round(tuning.match.durationSeconds * tuning.sim.stepsPerSecond),
     recordEvents: cfg.recordEvents ?? true,
+    inputMode: cfg.inputMode ?? 'redirect',
+    redirectRules: { ...tuning.input.redirect, ...cfg.redirect },
+    controllers: cfg.controllers ?? [null, null],
+    aiRngs: [new Rng(cfg.seed, Stream.ai0), new Rng(cfg.seed, Stream.ai1)],
+    pendingInputs: [...(cfg.inputs ?? [])].sort((a, b) => a.step - b.step),
+    inputLog: [],
     step: 0,
     phase: 'running',
     suddenDeathStep: 0,

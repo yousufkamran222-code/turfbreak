@@ -13,4 +13,5 @@ export type SimEvent =
   | { type: 'RunnerOverflow'; step: number; side: SideIndex; overflow: number }
   | { type: 'LeadChange'; step: number; leader: SideIndex }
   | { type: 'SuddenDeath'; step: number }
+  | { type: 'Redirect'; step: number; side: SideIndex; runner: number; x: number; y: number }
   | { type: 'MatchEnded'; step: number; winner: SideIndex; reason: EndReason };

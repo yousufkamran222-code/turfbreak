@@ -13,6 +13,7 @@ export interface MatchResult {
   stacks: [number, number];
   runners: [number, number];
   hits: [number, number];
+  redirects: [number, number];
 }
 
 export function summarize(world: World): MatchResult {
@@ -28,6 +29,7 @@ export function summarize(world: World): MatchResult {
     stacks: [world.sides[0].stacks, world.sides[1].stacks],
     runners: [world.sides[0].runnerCount, world.sides[1].runnerCount],
     hits: [world.sides[0].hits, world.sides[1].hits],
+    redirects: [world.sides[0].redirects, world.sides[1].redirects],
   };
 }
 
