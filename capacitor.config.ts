@@ -5,9 +5,10 @@ const config: CapacitorConfig = {
   appName: 'Turfbreak',
   webDir: 'dist',
   backgroundColor: '#0d0f14',
-  android: {
-    // Lets the WebView draw behind the system bars; the page handles safe-area insets.
-    adjustMarginsForEdgeToEdge: 'disable',
+  plugins: {
+    // With viewport-fit=cover in index.html, the WebView draws edge-to-edge and
+    // env(safe-area-inset-*) carries the real insets for the page to pad with.
+    SystemBars: { insetsHandling: 'native' },
   },
 };
 
