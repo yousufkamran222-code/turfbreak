@@ -25,46 +25,37 @@ export const tuning = {
     startSpread: 0.2618,
     /** Hard performance cap per side (MASTER_PROMPT 4.4). Extra spawns overflow into speed. */
     maxPerSide: 32,
-    /** Speed multiplier gained per overflowed spawn. */
+    /** Speed gained per overflowed spawn, as a share of base speed (additive, so it cannot compound). */
     overflowSpeed: 0.02,
+    /**
+     * Hard speed limit: about one path sample per step. Speed feeds hits and hits feed
+     * speed (Overclock, overflow), so without it a side can run away to absurd speeds.
+     */
+    maxSpeed: 1800,
+    /** Fast runners capture along their path at this spacing (well under one cell), so none skip cells. */
+    pathSampleSpacing: 30,
   },
   beam: {
     /** Distance between capture samples along a beam, in arena units. */
     sampleSpacing: 24,
-    /** How fast a beam swings to trail behind its runner after a turn, in radians per second. */
+    /** How fast an ultimate spins a beam, in radians per second (one turn in about 0.9 s). */
+    spinRate: 7,
+    /** How fast a beam swings back to trailing after a hit, in radians per second. */
     swingRate: 6,
   },
-  input: {
-    /** Default redirect rules; a match can override them (Mods such as Quick Hands and Slingshot will). */
-    redirect: {
-      /** Seconds for a charge to come back. */
-      cooldownSeconds: 5,
-      maxCharges: 1,
-      /** Whether a redirect also counts as a hit for Core triggers. */
-      countsAsHit: false,
-      /** Speed multiplier for a moment right after a redirect (1 = none). */
-      dashMul: 1,
-      dashSeconds: 1,
-    },
-  },
   ai: {
-    /** How far ahead a controller looks when scoring a heading. */
+    /** How far ahead a controller looks when scoring a launch heading, following bounces. */
     rayLength: 1100,
     raySpacing: 26,
-    /** Rival: aim error in radians (max 0.3), reaction delay after a charge is ready, minimum gain in enemy cells. */
-    rival: { aimError: 0.2, reactionSeconds: 0.5, minGain: 2 },
-    /** Assist plays the player's redirect deliberately worse than a rival. */
-    assist: { aimError: 0.3, reactionSeconds: 1.5, minGain: 4 },
-    /** Seconds to wait before re-checking when no heading was worth a redirect. */
-    recheckSeconds: 0.25,
-    /** A pickup is worth this many enemy cells to a controller, minus one cell per `pickupDistanceCost` units away. */
-    pickupValue: 24,
-    pickupDistanceCost: 70,
-    /** Weight on the cells a beam would sweep during the turn (Ricochet). */
-    sweepWeight: 0.4,
-    sweepStep: 0.25,
-    sweepSpacing: 40,
+    /** Rival: launch aim error in radians (max 0.3), and patience on the ultimate (1 = fire at the Core's threshold). */
+    rival: { aimError: 0.15, patience: 1 },
+    /** Auto-play for the player's side: a little sloppier and a little more impatient than the rival. */
+    assist: { aimError: 0.25, patience: 0.8 },
+    /** Controllers check the ultimate this often, and always fire it by this many seconds before the buzzer. */
+    ultimateCheckSeconds: 0.25,
+    ultimateDeadlineSeconds: 6,
   },
+
   tension: {
     /** Final seconds in which the HUD and audio turn urgent (presentation only). */
     urgentSeconds: 10,
@@ -87,9 +78,8 @@ export const tuning = {
   },
   match: {
     durationSeconds: 40,
-    countdownSeconds: 1.5,
-    /** When the one-line input prompt appears if the player has not used their input yet. */
-    promptSeconds: 5,
+    /** Seconds the player has to aim the launch before it launches on its own. */
+    aimSeconds: 4,
     /** If sudden death runs this long with no capture, the side with more hits wins. */
     suddenDeathMaxSeconds: 10,
     /** Share of the map that counts as "effectively decided" before half time (lab metric). */
@@ -119,6 +109,15 @@ export const tuning = {
     /** Frames of hit-stop on a clash involving a primary, in seconds. */
     hitStopSeconds: 0.06,
     tapMarkerSeconds: 0.45,
+    /** Slow motion when an ultimate fires: time scale and real seconds. */
+    ultimateSlowScale: 0.3,
+    ultimateSlowSeconds: 0.7,
+    ultimateFlashSeconds: 0.25,
+    /** Pause on the final frame before the result banner. */
+    endFreezeSeconds: 0.7,
+    /** Capture streaks: a gap this long ends a streak; callouts at these counts. */
+    streakGapSeconds: 0.7,
+    streakMilestones: [10, 25, 50, 100],
   },
   audio: {
     masterVolume: 0.5,
@@ -126,5 +125,8 @@ export const tuning = {
     hitResetSeconds: 1.2,
     /** At most one capture tick per side in this interval. */
     captureTickSeconds: 0.045,
+    /** Generated beat under matches; it gains layers in the final seconds. */
+    beatBpm: 118,
+    beatVolume: 0.35,
   },
 } as const;

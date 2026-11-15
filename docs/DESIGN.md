@@ -11,13 +11,16 @@ Living design detail as it firms up. The brief (`MASTER_PROMPT.md` sections 5 an
 - **Splits.** Spawned at the parent's position with a random heading. Over the per-side cap of 32, each extra spawn becomes +2% side speed (overflow), shown as a spawn that did not appear.
 - **Sudden death.** A tie at the buzzer continues until the next capture. If none comes within 10 s, the side with more hits wins, then a seeded coin.
 
-## Input and tension (Phase 2)
+## Input, ultimates, pickups and Mods (Phase 2, final)
 
-- **Input records.** `{ step, side, type: 'redirect', x, y }`. The UI queues them for the next step. The sim applies them at the start of the step, after which built-in controllers act, then cooldowns tick. Everything applied lands in `world.inputLog`. Seed, Cores and that log replay a match exactly (tested).
-- **Redirect.** Points the primary's heading straight at the tap and spends a charge; the cooldown starts when a charge is spent. It also sets the runner's beam swinging; this is the only way a beam sweeps (bounces and clashes snap it straight behind). For Ricochet a sharp redirect is therefore a big sweep, and the angle of the turn is the skill.
-- **Pickups.** Spawned from the sim PRNG, so they are part of the replay. Grab order alternates by step like captures. Surge multiplies the side's speed factor, Shield makes `capture` refuse to flip the owner's cells, Blast captures by centroid distance, Charge sets charges to 1.
-- **Controllers.** The heuristic scores 16 fixed headings (written as literals, no trig) by counting enemy cells along a 1,100-unit bouncing ray, plus 0.4 × the enemy cells a beam would sweep during the turn. It also considers heading straight at each reachable pickup, valued at 24 cells minus one per 70 units. It redirects when the best beats the current heading by `minGain` cells, after a reaction delay, with aim error. If nothing is worth it, it re-checks every 0.25 s. Assist uses the same code with worse numbers.
-- **Underdog boost.** The trailing side's speed factor is 1 + min(6%, 0.5 × deficit share).
+- **Input records.** `{ step, side, type: 'launch', dx, dy }` (valid only before step 2) and `{ step, side, type: 'ultimate' }`. The UI queues them for the next step; the sim applies them at the start of the step, then controllers act, then Encore echoes due this step. Everything applied lands in `world.inputLog`. Seed, Cores, Mods and that log replay a match exactly (tested).
+- **Ultimate.** One per match (`ultimates`); a Charge pickup sets it back to one. Firing runs the Core's `onUltimate`, then each Mod's `onUltimate`. Encore schedules echoes that re-run only the Core's effect.
+- **Controllers.** Launch: the best of 16 fixed headings by enemy cells along a 1,100-unit bouncing ray, plus aim error. Ultimate: each Core defines `ultimate.value(world, side)` and a threshold (Ricochet: enemy cells inside the Spin disc; Splitter: splits owned). Controllers fire when value ≥ threshold × patience, or 6 s before the buzzer.
+- **Beam.** It trails straight behind. It swings back to trailing at 6 rad/s after a Ricochet hit, and spins at 7 rad/s on Spin (reach capped at 300). It sweeps cells while swinging or spinning, and snags pickups.
+- **Pickups.** Any runner grabs one by touching it (radius 32 plus body, times the Magnet reach). A beam passing within 32 of one grabs it first.
+- **Mods.** `ModDef` with three levels, optional `intervalSeconds(level)` and hooks that receive the level. `world.currentMod` routes `ctx.triggered()` to a `ModTriggered` event, so the HUD flashes that slot.
+- **Speed.** Runner speed is capped at 1,800 units/s. Captures sample along each step's path at 30-unit spacing.
+- **Underdog boost.** The trailing side's speed factor is 1 + min(6%, 0.5 × deficit share), times any Surge.
 
 ## Juice and audio (Phase 2)
 
@@ -26,13 +29,17 @@ Living design detail as it firms up. The brief (`MASTER_PROMPT.md` sections 5 an
 - **Sparks:** from a pooled particle array (480 max), drawn as additive streaks.
 - **Shake:** trauma-based (trauma squared × 14 units), added by clashes, primary wall bounces and Core triggers.
 - **Hit-stop:** 60 ms on clashes involving a primary.
-- **Tap marker:** an expanding ring where the redirect aimed, plus a pulsing ring around the player's runner showing the cooldown.
+- **Rings:** spawn rings for pickups, collect bursts, Blast and ultimate shockwaves.
+- **Streaks:** consecutive captures with gaps under 0.7 s. Ticks climb the side's scale; ×10/×25/×50/×100 pop as callouts with a chord, sparks and shake.
+- **Ultimate moment:** 0.7 s of 0.3× slow motion, a white flash, a banner ("CRIMSON RICOCHET · SPIN!") and a rising whoosh.
+- **Beat:** 118 BPM kick and hats from the launch; snare and bass join in the final 10 s.
+- **Match end:** a 0.7 s freeze, confetti in the winner's colour, then the result drops in.
 - **Audio:**
   - Each side has its own pentatonic scale. Wall bounces climb it and the climb resets after 1.2 s without a hit.
   - Capture ticks are limited to one per side per 45 ms.
-  - Clashes, Core triggers and redirects each have their own sounds.
+  - Clashes, Core triggers, launches, ultimates, blasts and pickups each have their own sounds.
   - A tick plays every second in the last 10 s, and a stinger on win or loss.
-  - The audio context starts on the Play tap and suspends when the app pauses.
+  - The audio context starts on the first tap and suspends when the app pauses.
 
 ## Look (Phase 1)
 

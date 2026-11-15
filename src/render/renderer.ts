@@ -1,5 +1,4 @@
 import type { RunnerShape } from '../sim/abilities';
-import { cooldownSteps } from '../sim/input';
 import { beamLength } from '../sim/step';
 import { statValue, type World } from '../sim/world';
 import type { Juice } from './juice';
@@ -7,6 +6,14 @@ import { tuning } from '../content/tuning';
 import { mix, rgba } from './colors';
 
 export const BACKGROUND = '#0b0d12';
+
+/** Things drawn over the arena that are not part of the world: the launch preview and the ultimate flash. */
+export interface Overlay {
+  /** Launch direction being aimed, from the player's primary, or null. */
+  aim: { dx: number; dy: number } | null;
+  /** Screen flash strength from 0 to 1. */
+  flash: number;
+}
 
 export interface SidePalette {
   core: string;
@@ -116,7 +123,7 @@ export class ArenaRenderer {
    * `prevX/prevY` hold runner positions from the previous sim step (by index),
    * and `alpha` is how far the renderer is between that step and the current one.
    */
-  draw(world: World, prevX: Float64Array, prevY: Float64Array, alpha: number, juice: Juice, now: number): void {
+  draw(world: World, prevX: Float64Array, prevY: Float64Array, alpha: number, juice: Juice, now: number, overlay: Overlay): void {
     if (this.arenaKey !== world.arena) this.buildPaths(world);
     const c = this.ctx;
     const k = this.pxPerUnit;
@@ -187,7 +194,7 @@ export class ArenaRenderer {
     juice.drawRings(c, [this.palettes[0].core, this.palettes[1].core, ...pickupColors], now);
     this.drawPickups(world, now);
 
-    this.drawInputRing(world, prevX, prevY, alpha, now, unit);
+    if (overlay.aim) this.drawAim(world, overlay.aim, now);
 
     // Runners: splits first, primaries on top.
     for (const primaryPass of [false, true]) {
@@ -214,6 +221,13 @@ export class ArenaRenderer {
         c.lineWidth = (r.primary ? 3 : 1.5) * unit * 1.5;
         c.stroke();
       }
+    }
+
+    juice.drawCallouts(c, [this.palettes[0].beam, this.palettes[1].beam], now);
+    if (overlay.flash > 0) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = `rgba(255, 255, 255, ${(0.55 * overlay.flash * tuning.juice.intensity).toFixed(3)})`;
+      c.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
   }
 
@@ -247,30 +261,45 @@ export class ArenaRenderer {
     }
   }
 
-  /** The player's (side 0) redirect cooldown, as a ring around their primary. */
-  private drawInputRing(world: World, prevX: Float64Array, prevY: Float64Array, alpha: number, now: number, unit: number): void {
-    if (world.inputMode !== 'redirect') return;
-    const i = world.runners.findIndex((r) => r.side === 0 && r.primary);
-    if (i < 0) return;
-    const r = world.runners[i]!;
-    const st = world.sides[0];
-    const x = lerp(prevX[i]!, r.x, alpha);
-    const y = lerp(prevY[i]!, r.y, alpha);
-    const ready = st.charges > 0;
-    const fill = ready ? 1 : 1 - st.chargeSteps / cooldownSteps(world);
+  /** The launch preview: a dotted path from the player's runner, following up to two wall bounces. */
+  private drawAim(world: World, aim: { dx: number; dy: number }, now: number): void {
+    const r = world.runners.find((x) => x.side === 0 && x.primary);
+    if (!r) return;
     const c = this.ctx;
-    const rad = statValue(st, 'bodyRadius') * 1.7 + 14;
+    const size = world.arena.size;
+    const rad = statValue(world.sides[0], 'bodyRadius');
+    let x = r.x;
+    let y = r.y;
+    let dx = aim.dx;
+    let dy = aim.dy;
+    c.setLineDash([18, 16]);
+    c.lineDashOffset = -now * 60;
+    c.lineWidth = 6;
     c.lineCap = 'round';
-    c.lineWidth = 4.5 * unit * 1.6;
-    c.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    c.strokeStyle = 'rgba(255, 255, 255, 0.85)';
     c.beginPath();
-    c.arc(x, y, rad, 0, Math.PI * 2);
+    c.moveTo(x, y);
+    for (let bounce = 0; bounce < 3; bounce++) {
+      // Distance to the next wall along the heading.
+      let t = Infinity;
+      if (dx > 0) t = Math.min(t, (size - rad - x) / dx);
+      if (dx < 0) t = Math.min(t, (rad - x) / dx);
+      if (dy > 0) t = Math.min(t, (size - rad - y) / dy);
+      if (dy < 0) t = Math.min(t, (rad - y) / dy);
+      if (!Number.isFinite(t)) break;
+      x += dx * t;
+      y += dy * t;
+      c.lineTo(x, y);
+      if (x <= rad + 1e-6 || x >= size - rad - 1e-6) dx = -dx;
+      if (y <= rad + 1e-6 || y >= size - rad - 1e-6) dy = -dy;
+    }
     c.stroke();
-    const pulse = ready ? 0.75 + 0.25 * Math.sin(now * 8) : 0.85;
-    c.strokeStyle = ready ? `rgba(255, 255, 255, ${pulse.toFixed(3)})` : this.palettes[0].beam;
+    c.setLineDash([]);
+    // Arrowhead at the runner.
+    c.fillStyle = '#ffffff';
     c.beginPath();
-    c.arc(x, y, rad, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, fill)));
-    c.stroke();
+    c.arc(r.x + aim.dx * 70, r.y + aim.dy * 70, 12 + 3 * Math.sin(now * 8), 0, Math.PI * 2);
+    c.fill();
   }
 }
 

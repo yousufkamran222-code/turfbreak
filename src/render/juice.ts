@@ -69,8 +69,18 @@ export class Juice {
         this.trauma += J.traumaTrigger * k * 0.5;
         break;
       }
-      case 'Redirect':
-        this.rings.push({ x: ev.x, y: ev.y, t: now, color: ev.side, from: 18, to: 58, dur: J.tapMarkerSeconds });
+      case 'UltimateFired': {
+        const r = world.runners.find((x) => x.side === ev.side && x.primary);
+        if (!r) break;
+        this.rings.push({ x: r.x, y: r.y, t: now, color: ev.side, from: 20, to: 420, dur: 0.6 });
+        this.sparks(r.x, r.y, ev.side, Math.round(40 * k), 600);
+        this.trauma += 0.6 * k;
+        break;
+      }
+      case 'Blast':
+        this.rings.push({ x: ev.x, y: ev.y, t: now, color: ev.side, from: 20, to: ev.radius, dur: 0.4 });
+        this.sparks(ev.x, ev.y, ev.side, Math.round(14 * k), 380);
+        this.trauma += J.traumaClash * k;
         break;
       case 'PickupSpawned': {
         const slot = 2 + world.pickupDefs.findIndex((d) => d.id === ev.kind);
@@ -107,7 +117,23 @@ export class Juice {
     }
   }
 
+  /** Floating text such as a streak milestone, in a colour slot. Bigger for higher tiers. */
+  readonly callouts: { text: string; x: number; y: number; t: number; color: number; size: number }[] = [];
+
+  callout(text: string, x: number, y: number, color: number, tier: number): void {
+    this.callouts.push({ text, x, y, t: -1, color, size: 46 + tier * 14 });
+    this.trauma = Math.min(1, this.trauma + (0.15 + tier * 0.1) * J.intensity);
+    this.sparks(x, y, color, Math.round((10 + tier * 8) * J.intensity), 320);
+  }
+
+  /** A burst of sparks across the arena in the winner's colour. */
+  confetti(side: number, size: number): void {
+    for (let i = 0; i < 6; i++) this.sparks(size * (0.15 + 0.14 * i), size * 0.5, side, Math.round(24 * J.intensity), 700);
+  }
+
   update(dt: number, now: number): void {
+    for (const c of this.callouts) if (c.t < 0) c.t = now;
+    for (let i = this.callouts.length - 1; i >= 0; i--) if (now - this.callouts[i]!.t > 0.9) this.callouts.splice(i, 1);
     this.hitStop = Math.max(0, this.hitStop - dt);
     this.trauma = Math.max(0, this.trauma - J.traumaDecay * dt);
     const t2 = this.trauma * this.trauma * J.shakeMax;
@@ -164,6 +190,23 @@ export class Juice {
       }
       c.stroke();
     }
+  }
+
+  drawCallouts(c: CanvasRenderingContext2D, colors: readonly string[], now: number): void {
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    for (const co of this.callouts) {
+      const t = Math.max(0, (now - co.t) / 0.9);
+      const pop = t < 0.15 ? 0.6 + (t / 0.15) * 0.6 : 1.2 - Math.min(0.2, (t - 0.15) * 0.4);
+      c.globalAlpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      c.font = `900 ${Math.round(co.size * pop)}px system-ui, sans-serif`;
+      c.lineWidth = 8;
+      c.strokeStyle = '#0b0d12';
+      c.strokeText(co.text, co.x, co.y - t * 60);
+      c.fillStyle = colors[co.color] ?? '#ffffff';
+      c.fillText(co.text, co.x, co.y - t * 60);
+    }
+    c.globalAlpha = 1;
   }
 
   drawRings(c: CanvasRenderingContext2D, colors: readonly string[], now: number): void {

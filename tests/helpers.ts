@@ -14,6 +14,7 @@ export const blank: CoreDef = {
   signature: '',
   stackLabel: '',
   values: {},
+  ultimate: { name: 'None', description: '', value: () => 0, threshold: 1 },
   hooks: {},
 };
 

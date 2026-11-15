@@ -1,7 +1,7 @@
 import { tuning } from '../content/tuning';
 import { runControllers } from './ai';
 import { findCell } from './arena';
-import { applyPendingInputs, tickInputState } from './input';
+import { applyPendingInputs, runUltimate } from './input';
 import { updatePickups } from './pickups';
 import type { CaptureCause, EndReason } from './events';
 import { rotateSmall } from './vec';
@@ -11,19 +11,19 @@ function other(side: SideIndex): SideIndex {
   return side === 0 ? 1 : 0;
 }
 
-/** Underdog boost, redirect dash and Surge, once per step per side. */
+/** Underdog boost and Surge, once per step per side. */
 function updateSpeedFactors(world: World): void {
   const n = world.arena.cellCount;
   for (const s of [0, 1] as const) {
     const deficit = (world.counts[other(s)] - world.counts[s]) / n;
     const underdog = deficit > 0 ? 1 + Math.min(tuning.tension.underdogMax, tuning.tension.underdogPerShare * deficit) : 1;
-    const dash = world.sides[s].dashSteps > 0 ? world.redirectRules.dashMul : 1;
-    world.sides[s].speedFactor = underdog * dash * world.sides[s].surgeMul;
+    world.sides[s].speedFactor = underdog * world.sides[s].surgeMul;
   }
 }
 
 export function runnerSpeed(world: World, r: Runner): number {
-  return statValue(world.sides[r.side], 'speed') * r.speedMul * world.sides[r.side].speedFactor;
+  const v = statValue(world.sides[r.side], 'speed') * r.speedMul * world.sides[r.side].speedFactor;
+  return Math.min(v, tuning.runner.maxSpeed);
 }
 
 function endMatch(world: World, winner: SideIndex, reason: EndReason): void {
@@ -34,7 +34,7 @@ function endMatch(world: World, winner: SideIndex, reason: EndReason): void {
   emit(world, { type: 'MatchEnded', step: world.step, winner, reason });
 }
 
-function capture(world: World, cell: number, side: SideIndex, cause: CaptureCause): void {
+export function capture(world: World, cell: number, side: SideIndex, cause: CaptureCause): void {
   const prev = world.owner[cell]!;
   if (prev === side || world.phase === 'ended') return;
   // A Shield pickup makes the owner's cells untakeable for a moment.
@@ -45,17 +45,37 @@ function capture(world: World, cell: number, side: SideIndex, cause: CaptureCaus
   const st = world.sides[side];
   st.captures++;
   emit(world, { type: 'CellCaptured', step: world.step, cell, side, cause });
-  st.core.hooks.onCapture?.(world.contexts[side], cell);
+  const ctx = world.contexts[side];
+  const mod = world.currentMod;
+  world.currentMod = -1;
+  st.core.hooks.onCapture?.(ctx, cell);
+  for (let i = 0; i < st.mods.length; i++) {
+    const m = st.mods[i]!;
+    if (!m.mod.hooks.onCapture) continue;
+    world.currentMod = i;
+    m.mod.hooks.onCapture(ctx, cell, m.level);
+  }
+  world.currentMod = mod;
   if (world.phase === 'suddenDeath') endMatch(world, side, 'suddenDeath');
 }
 
-function hit(world: World, runner: Runner, kind: 'wall' | 'clash' | 'redirect'): void {
+/** Count a hit and fire the Core's, then each Mod's, on-hit hook. */
+export function hit(world: World, runner: Runner, kind: 'wall' | 'clash'): void {
   const st = world.sides[runner.side];
   st.hits++;
   const info = world.hitScratch;
   info.runner = runner;
   info.kind = kind;
-  st.core.hooks.onHit?.(world.contexts[runner.side], info);
+  const ctx = world.contexts[runner.side];
+  world.currentMod = -1;
+  st.core.hooks.onHit?.(ctx, info);
+  for (let i = 0; i < st.mods.length; i++) {
+    const m = st.mods[i]!;
+    if (!m.mod.hooks.onHit) continue;
+    world.currentMod = i;
+    m.mod.hooks.onHit(ctx, info, m.level);
+  }
+  world.currentMod = -1;
 }
 
 function radiusOf(world: World, r: Runner): number {
@@ -63,6 +83,8 @@ function radiusOf(world: World, r: Runner): number {
 }
 
 function moveRunner(world: World, r: Runner): void {
+  r.lastX = r.x;
+  r.lastY = r.y;
   const speed = runnerSpeed(world, r);
   r.x += r.dx * speed * world.dt;
   r.y += r.dy * speed * world.dt;
@@ -152,6 +174,17 @@ function resolveClashes(world: World, count: number): void {
 }
 
 function captureUnder(world: World, r: Runner): void {
+  // A runner moving more than a sample spacing per step captures along its path, so no
+  // speed lets it skip cells. (Across a wall bounce this cuts the corner slightly.)
+  const dx = r.x - r.lastX;
+  const dy = r.y - r.lastY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const samples = Math.floor(dist / tuning.runner.pathSampleSpacing);
+  for (let k = 1; k <= samples; k++) {
+    const f = k / (samples + 1);
+    r.cell = findCell(world.arena, r.lastX + dx * f, r.lastY + dy * f, r.cell);
+    if (world.owner[r.cell] !== r.side) capture(world, r.cell, r.side, 'runner');
+  }
   r.cell = findCell(world.arena, r.x, r.y, r.cell);
   if (world.owner[r.cell] !== r.side) capture(world, r.cell, r.side, 'runner');
 
@@ -168,42 +201,52 @@ function captureUnder(world: World, r: Runner): void {
   }
 }
 
+const spinStep = tuning.beam.spinRate / tuning.sim.stepsPerSecond;
 const swingStep = tuning.beam.swingRate / tuning.sim.stepsPerSecond;
 // cos(swingStep) by Taylor series, so no engine-specific Math.cos result enters the sim.
 const cosSwing = 1 - (swingStep * swingStep) / 2 + swingStep ** 4 / 24;
 
 /**
- * After a redirect, swing the beam toward straight-behind at a fixed rate, sweeping
- * cells as it goes. Otherwise (wall bounces, clashes) it snaps straight behind, so
- * Ricochet's big sweeps come from the player's taps rather than from bounce luck.
+ * Point the beam. An ultimate spin turns it through full circles; a swing (set
+ * by the Core after a hit) turns it back toward trailing at a fixed rate; both
+ * sweep cells as they go. Otherwise it snaps straight behind the runner.
  */
-function swingBeam(r: Runner): void {
+function aimBeam(r: Runner): void {
+  if (r.spinLeft > 0) {
+    const step = Math.min(spinStep, r.spinLeft);
+    const dir = { dx: r.bx, dy: r.by };
+    rotateSmall(dir, step);
+    r.bx = dir.dx;
+    r.by = dir.dy;
+    r.spinLeft -= step;
+    return;
+  }
   const tx = -r.dx;
   const ty = -r.dy;
-  const dot = r.bx * tx + r.by * ty;
-  if (!r.swinging || dot >= cosSwing) {
+  if (!r.swinging || r.bx * tx + r.by * ty >= cosSwing) {
     r.bx = tx;
     r.by = ty;
     r.swinging = false;
     return;
   }
-  const cross = r.bx * ty - r.by * tx;
   const dir = { dx: r.bx, dy: r.by };
-  rotateSmall(dir, cross >= 0 ? swingStep : -swingStep);
+  rotateSmall(dir, r.bx * ty - r.by * tx >= 0 ? swingStep : -swingStep);
   r.bx = dir.dx;
   r.by = dir.dy;
 }
 
-/** Current beam length of a runner. Only primaries carry beams. */
+/** Current beam length of a runner. Only primaries carry beams; a spin caps the reach. */
 export function beamLength(world: World, r: Runner): number {
-  return r.primary ? statValue(world.sides[r.side], 'beamLength') : 0;
+  if (!r.primary) return 0;
+  const l = statValue(world.sides[r.side], 'beamLength');
+  return r.spinLeft > 0 ? Math.min(l, r.spinReach) : l;
 }
 
 /** Sample along the beam from the runner outward and capture every enemy cell it covers. */
 function captureBeam(world: World, r: Runner): void {
   const length = beamLength(world, r);
   if (length <= 0) return;
-  swingBeam(r);
+  aimBeam(r);
   const spacing = tuning.beam.sampleSpacing;
   const size = world.arena.size;
   let hint = r.cell;
@@ -231,29 +274,43 @@ function updateLead(world: World): void {
   }
   if (world.step <= world.matchSteps / 2) {
     const n = world.arena.cellCount;
-    world.maxShareFirstHalf = Math.max(world.maxShareFirstHalf, a / n, b / n);
+    const share = Math.max(a, b) / n;
+    if (share > world.maxShareFirstHalf) {
+      world.maxShareFirstHalf = share;
+      world.maxShareFirstHalfSide = a >= b ? 0 : 1;
+    }
   }
 }
 
 /** Advance the world by one fixed step of 1/60 s. */
 export function stepWorld(world: World): void {
   if (world.phase === 'ended') return;
-  world.events.length = 0;
+  // Events emitted while the world was created (match-start hooks) ride along with step 1's.
+  if (world.step > 0) world.events.length = 0;
   world.step++;
 
   applyPendingInputs(world);
   runControllers(world);
-  for (const s of [0, 1] as const) {
-    const st = world.sides[s];
-    for (; st.pendingRedirectHits > 0; st.pendingRedirectHits--) {
-      const r = world.runners.find((x) => x.side === s && x.primary);
-      if (r) hit(world, r, 'redirect');
-    }
+  while (world.scheduled.length > 0 && world.scheduled[0]!.step <= world.step) {
+    runUltimate(world, world.scheduled.shift()!.side, true);
   }
-  tickInputState(world);
   updateSpeedFactors(world);
 
-  for (const s of [0, 1] as const) world.sides[s].core.hooks.onStep?.(world.contexts[s]);
+  for (const s of [0, 1] as const) {
+    const st = world.sides[s];
+    const ctx = world.contexts[s];
+    world.currentMod = -1;
+    st.core.hooks.onStep?.(ctx);
+    for (let i = 0; i < st.mods.length; i++) {
+      const m = st.mods[i]!;
+      if (!m.mod.hooks.onInterval || !m.mod.intervalSeconds) continue;
+      const every = Math.max(1, Math.round(m.mod.intervalSeconds(m.level) * tuning.sim.stepsPerSecond));
+      if (world.step % every !== 0) continue;
+      world.currentMod = i;
+      m.mod.hooks.onInterval(ctx, m.level);
+    }
+    world.currentMod = -1;
+  }
 
   // Runners spawned by hooks during this step start moving next step.
   const count = world.runners.length;

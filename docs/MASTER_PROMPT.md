@@ -22,7 +22,7 @@ The game takes the viral "who wins?" territory-battle simulation videos, in whic
 
 ### 3.3 The product in one paragraph
 
-Turfbreak (working title) is a portrait, one-handed, build-then-watch roguelite. The player picks a Core, which is an agent with one signature snowballing ability, then fights a run of 10 short territory matches against escalating rivals. Between matches the player drafts Mods that combine with the Core into builds that grow absurdly powerful. Matches last about 40 seconds and mostly play themselves, with one tap-to-redirect input that lets a good player steal a close match. A run takes 6 to 10 minutes. The game ships as a web game for portals such as CrazyGames and as an Android app on Google Play, from one codebase.
+Turfbreak (working title) is a portrait, one-handed, build-then-watch roguelite. The player picks a Core, which is an agent with one signature snowballing ability, then fights a run of 10 short territory matches against escalating rivals. Between matches the player drafts Mods that combine with the Core into builds that grow absurdly powerful. Matches last about 40 seconds and play themselves; the player aims the launch and picks one moment to fire their Core's ultimate. A run takes 6 to 10 minutes. The game ships as a web game for portals such as CrazyGames and as an Android app on Google Play, from one codebase.
 
 ### 3.4 Design pillars
 
@@ -169,36 +169,36 @@ The lab measures whether these produce the tension in pillar 1. Remove either if
 
 ### 5.4 Player input
 
-- **Redirect:** tapping anywhere in the arena turns the player's primary runner to head straight at the tap point. It has a 5-second cooldown, shown as a ring on the runner and a bar under the arena. The first charge is ready at match start.
-- **Why this input:** it is one-handed, needs no tutorial, and has real skill in it: aim through a dense enemy cluster, line up a long wall-to-wall path, intercept the enemy runner to bank a clash, or dodge one.
-- **Rival redirect:** rivals also redirect, driven by a simple heuristic (aim at the largest enemy cluster in range) with error and reaction delay that shrink in later rounds. In rounds 1 to 3 rivals do not redirect.
-- **Speed:** a 1x and 2x toggle. Player matches cannot be skipped.
-- **Assist:** a settings option lets the game use the player's redirect with a mediocre heuristic, for accessibility and for players who want to watch.
+Changed in Phase 2 after two play tests (see DECISIONS). The tap-to-redirect was not fun: its effect was indirect and delayed. A match is now mostly watched, and the player's choices live in the draft. There are two light-touch inputs:
 
-Phase 2 tested this input against alternatives (Redirect+ with a 3 s cooldown that counts as a hit, and Hold to boost); Yousuf chose Redirect at 5 s. Its main targets are pickups (5.4.1) and, for Ricochet, beam sweeps.
+- **Launch aim:** before each match, the player drags anywhere on the arena to aim their primary runner's launch. A dotted preview shows the path with its first bounces. Releasing launches. If the player does nothing for 4 seconds, it launches on its own.
+- **Ultimate:** once per match the player can fire their Core's ultimate (Ricochet: Spin, Splitter: Burst) with a big button under the arena. Timing is the skill. A Charge pickup makes it ready again.
+- **Rivals** aim their launch by scoring headings and fire their ultimate when their Core's own "good moment" measure passes a threshold, or 6 seconds before the buzzer at the latest. In rounds 1 to 3, rivals may skip both (Phase 3 decides).
+- **Speed:** a 1x and 2x toggle. Player matches cannot be skipped.
+- **Auto-play:** a settings option lets the game aim and fire for the player, for accessibility and for players who only want to watch.
 
 ### 5.4.1 Pickups
 
-Added in Phase 2 from play feedback. Temporary in-match upgrades give the redirect something concrete to aim at.
+Added in Phase 2 from play feedback.
 
 - The first spawns 3 s in, then one every 6 s at a random cell centre at least 220 units from both primaries. At most 2 are on the map; each lasts 10 s and blinks in its last 2 s.
-- Only a primary runner grabs one, by touching it.
+- **Any runner** grabs one by touching it, and a beam that passes over one snags it. A side's Magnet Mod extends its reach.
 - Starting set (`src/content/pickups.ts`):
 
   | Pickup | Effect |
   | --- | --- |
   | Surge | Your runners move 50% faster for 4 s |
   | Blast | Captures every cell within 170 units of the pickup |
-  | Charge | Your redirect is ready again at once |
+  | Charge (rarer) | Your ultimate is ready again |
   | Shield | Your cells cannot be taken for 3 s |
 
-- Later Mods can build on pickups (for example, splits can grab them, pickups last longer, Blast is bigger).
+- The same effects exist as draftable Mods: Afterburner (Surge), Shockwave (Blast), Bulwark (Shield) and Magnet.
 
 ### 5.5 Ability system
 
 Cores and Mods are built from triggers, counters and effects.
 
-- **Hooks:** `onMatchStart`, `onStep`, `onHit`, `onWallBounce`, `onClash`, `onCapture`, `onCellLost`, `onRedirect`, `onInterval(seconds)`, `onLastSeconds(seconds)`, `onLeadChange`. Built so far: `onMatchStart`, `onStep`, `onHit` (with kind wall, clash or redirect), `onCapture`, `onRedirect`.
+- **Hooks:** `onMatchStart`, `onStep`, `onHit`, `onWallBounce`, `onClash`, `onCapture`, `onCellLost`, `onUltimate`, `onInterval(seconds)`, `onLastSeconds(seconds)`, `onLeadChange`. Built so far: `onMatchStart`, `onStep` (Cores), `onHit` (with kind wall or clash), `onCapture`, `onUltimate`, and for Mods `onInterval`.
 - **Context API given to hooks:** read-only views of the world, plus a small set of mutators: `addStat`, `mulStat`, `addStacks`, `spawnRunner`, `captureCells`, `captureRadius`, `shieldCells`, `lockCells`, `fireBeam`, `pushRunner`, `teleportRunner`, `schedule`, and the sim PRNG. Hooks may not mutate the world any other way.
 - **Stats:** speed, body radius, capture radius, beam length, trigger thresholds, cooldowns. Each stat has an additive layer and a multiplicative layer; additive applies first.
 - **Stacks:** each Core has one named stack counter (laser length, splits, pulse radius). Mods that say "your Core's stacks" act on it, which is how one Mod works with every Core.
@@ -212,8 +212,8 @@ Each Core is a colour, a shape, a name and one signature ability. The HUD shows 
 
 | Core | Colour | Signature | Stack shown |
 | --- | --- | --- | --- |
-| Ricochet | Crimson | Trails a straight beam behind it. After a redirect the beam swings back to trailing, capturing every cell it sweeps; wall bounces and clashes snap it without sweeping. The beam grows 38 units per hit (starts at 60) | Beam length |
-| Splitter | Magenta | Every 7 hits (splits' hits count too), spawns a smaller, slower, permanent split runner | Splits |
+| Ricochet | Crimson | Trails a straight beam behind it. After each hit the beam swings back to trailing, capturing every cell it sweeps, and it snags pickups. The beam grows 40 units per hit (starts at 60). Ultimate **Spin**: the beam sweeps a full circle, up to 300 long | Beam length |
+| Splitter | Magenta | Every 8 hits (splits' hits count too), spawns a smaller, slower, permanent split runner. Ultimate **Burst**: one split for every 3 owned (at least one) | Splits |
 | Pulse | Cyan | Every 5 hits, emits a shockwave that captures in a radius; the radius grows each pulse | Pulse radius |
 | Bloom | Green | Cells it captures spread to one adjacent enemy cell after 2 seconds; the spread chance grows per capture | Spread chance |
 | Fortress | Gold | Every 10 captures, its whole territory gains a shield point | Shields granted |
@@ -229,6 +229,7 @@ Design each Core so its growth curve has a different shape: Ricochet is linear a
 - Rarities: common, uncommon, rare. Later rounds offer more rares.
 - Picking a Mod the player already owns levels it up, to a maximum of level 3. Each level raises its numbers.
 - Phase 3 ships 16 Mods; v1 ships 30 or more. The list below is a starting set. Change, cut and add freely, keeping pillar 2 in mind: prefer Mods that change what a build does over Mods that add a percentage.
+- **Built in Phase 2 (first version, `src/content/mods.ts`):** Overclock, Growth Spurt, Chain Reaction, Afterburner, Shockwave, Bulwark, Magnet, Encore (your ultimate repeats) and Head Start. The table below remains the wider candidate list; Redirect-group Mods are gone with the redirect, and Quick Hands and Twin Tap will be redesigned around the ultimate.
 
 | Mod | Group | Effect at level 1 |
 | --- | --- | --- |
@@ -246,10 +247,8 @@ Design each Core so its growth curve has a different shape: Ricochet is linear a
 | Encircle | Territory | Enemy cells with no enemy neighbour flip to you |
 | Landmines | Territory | Every 8 seconds, mine one of your cells; an enemy runner that touches it is thrown back and nearby cells return to you |
 | Critical Mass | Territory | The first time you hold 65% of the map, capture everything in a large radius around your runner |
-| Quick Hands | Redirect | Redirect cooldown is 30% shorter |
-| Slingshot | Redirect | After a redirect, double speed for 1.5 seconds |
-| Shockwave Tap | Redirect | A redirect emits a capture pulse at the runner |
-| Twin Tap | Redirect | Redirect holds two charges and also turns your splits |
+| Quick Hands | Ultimate | Your ultimate is ready again 15 seconds after you use it |
+| Twin Tap | Ultimate | Start with two ultimate charges |
 | Underdog | Timing | While behind, gain 25% speed |
 | Buzzer Beater | Timing | In the final 8 seconds, your Core triggers twice as often |
 | Front Runner | Timing | While ahead, your frontier cells are shielded |
@@ -257,7 +256,7 @@ Design each Core so its growth curve has a different shape: Ricochet is linear a
 | Collector | Economy | After winning by 20 or more cells, the next draft offers 4 Mods |
 | Glass Cannon | Wild | Gain 60% speed; start each match with 40% of the map |
 | Mirror Shard | Wild | Copy the rival Core's signature at half strength |
-| Decoy | Wild | Start with a slow extra runner that rival redirects prefer to target |
+| Decoy | Wild | Start with a slow extra runner that rivals' clashes prefer |
 
 ### 5.8 The run
 
@@ -267,7 +266,7 @@ Design each Core so its growth curve has a different shape: Ricochet is linear a
 4. **Draft:** after every match, win or lose, pick 1 of 3 Mods. The player may reroll the offer by spending a reroll, or skip the pick to gain a reroll. Start with 1 reroll.
 5. **Bosses:** rounds 5 and 10 are bosses, each with a hand-authored build and an arena twist (for example a shrinking arena, neutral wall cells, or a rival that starts with two runners). Beating round 10 wins the run.
 6. **Rivals:** a rival is a Core plus Mods. Mod count and levels scale with the round. Draw rival builds from hand-authored archetype lists per Core so they are coherent, not random piles. Name every rival by colour and Core in capitals, as the videos do.
-7. **Ascension:** winning a run unlocks the next tier, up to 8. Each tier adds one rule: rivals carry an extra Mod, rivals redirect better, the player starts with 2 hearts, and so on.
+7. **Ascension:** winning a run unlocks the next tier, up to 8. Each tier adds one rule: rivals carry an extra Mod, rivals aim and time their ultimate better, the player starts with 2 hearts, and so on.
 8. **Endless:** after a winning run the player may continue against rivals that keep scaling until the hearts run out. This is where broken builds get to show off.
 
 Target pacing: a full run takes 6 to 10 minutes. The time between the end of one match and the start of the next should be under 15 seconds for a player who decides quickly.
@@ -304,7 +303,7 @@ Build these as a layer on the event queue, each with an intensity setting and a 
 
 ### 6.4 Layout
 
-- **Portrait reference:** 390 by 844. From the top: VS header with both build cards and live stack counters, the territory bar with counts and a half marker, the square arena at full width, then the player's Mod slots and the redirect cooldown bar.
+- **Portrait reference:** 390 by 844. From the top: VS header with both build cards and live stack counters, the territory bar with counts and a half marker, the square arena at full width, then the ultimate button.
 - **Desktop and landscape:** the arena is centred and height-limited, with the player's build on the left and the rival's build and a trigger log on the right. Portals require a good desktop presentation.
 - **Scaling:** the arena scales to the largest square that fits. Cap device pixel ratio at 2.
 - **Android:** lock to portrait, handle edge-to-edge insets with safe-area padding, handle the back button (back from a match opens pause; back from home exits), and pause when the app is backgrounded.
@@ -321,14 +320,14 @@ Build these as a layer on the event queue, each with an intensity setting and a 
 | Result and draft | Win or loss banner, one highlight stat, then 3 Mod cards with reroll and skip |
 | Run summary | Rounds won, final build, best moment, share button, play again |
 | Collection | Cores and Mods found, with stats and unlock hints |
-| Settings | Volumes, haptics, reduce motion, high contrast, redirect assist, build version and commit hash |
+| Settings | Volumes, haptics, reduce motion, high contrast, auto-play, build version and commit hash |
 
 A Mod card shows the name, a procedural icon, one line of effect text with its numbers filled in, its group tag and its level. Long-press or hover shows detail.
 
 ### 6.6 Onboarding
 
 - First launch shows one screen: "WHO WINS?" with two Cores to pick from. The pick becomes the player's Core and the match starts.
-- Five seconds in, a single pulsing prompt says "Tap to redirect". It disappears after the first tap.
+- Before the first match, a prompt says "Drag to aim · release to launch". The ultimate button pulses when ready.
 - The first draft carries one line: "Pick a Mod. It stays for the whole run."
 - Everything else is taught by short contextual hints, one line each, shown once, never blocking play.
 - There is no tutorial mode and no forced reading.
@@ -344,7 +343,7 @@ Each of these gives a reason to come back without a backend and without grind.
 | Endless | Keep going after a winning run; best round is recorded per Core | 4 |
 | Daily Clash | One seeded run per UTC day with a fixed Core and fixed draft offers. One scored attempt. Result is a compact shareable text block | 6 |
 | Versus Lab | Unlocks after the first completed run. Pick any two builds from unlocked content and watch them fight, with speed and skip controls | 6 |
-| Replay codes | A compact code holding version, seed, both builds and the redirect inputs. Web builds accept it as a URL parameter | 6 |
+| Replay codes | A compact code holding version, seed, both builds and the launch and ultimate inputs. Web builds accept it as a URL parameter | 6 |
 | Clip export | Record a match to video with `canvas.captureStream` and `MediaRecorder` where the browser supports it; feature-detect and hide the button otherwise. Android shares through the system sheet | 6 |
 | Lifetime stats | Records per Core: best margin, longest beam, most splits, fastest Wipeout | 6 |
 
@@ -455,7 +454,7 @@ It reports:
 - **Core matrix:** win rate of every Core against every other, with no Mods, over at least 500 seeds each.
 - **Mod impact:** the change in win rate from adding each Mod to each Core, at each level. This finds dead Mods and broken pairs.
 - **Tension metrics:** mean lead changes per match, the time of the final lead change, the share of matches where one side passed 70% of the map before half time, and the margin distribution.
-- **Redirect value:** win rate with no redirect, random redirect and the heuristic redirect on the same seeds.
+- **Input value:** win rate with no input, random aim and timing, and the heuristic on the same seeds.
 - **Run outcomes:** run win rate per ascension tier for a random drafter and for a synergy-seeking drafter.
 
 Starting targets:
@@ -466,7 +465,7 @@ Starting targets:
 | Any Core against any other, no Mods | 40% to 60% |
 | Mean lead changes per even match | 2 or more |
 | Even matches effectively decided before half time | Under 15% |
-| Heuristic redirect against no redirect | 10 to 20 points of win rate |
+| Heuristic launch and ultimate against none | 10 to 20 points of win rate |
 | Random drafter, tier 0 run win rate | 35% to 50% |
 | Synergy drafter, tier 0 run win rate | About 80% |
 | Largest win-rate impact of any common Mod at level 1 | Under 25 points |
@@ -507,14 +506,13 @@ Done when: Ricochet against Splitter is close to even over 500 seeds, determinis
 
 Goal: prove that a match is fun to play, not only to watch.
 
-- Redirect input with cooldown feedback, and the rival redirect heuristic.
-- Underdog boost and overtime surge, tuned with the lab's tension metrics.
-- First juice pass: capture pops, shake, sparks, hit-stop, synthesised hit notes and capture ticks.
-- The 2x speed toggle.
-- Behind a debug switch, two alternative inputs for comparison: hold to boost speed on a meter, and no input at all.
-- The redirect-value report in the lab.
+As built, after two play tests: the redirect input was tried with alternatives and rejected. The phase ended with launch aim plus a once-per-match ultimate, pickups, nine first-version Mods, a five-round mini draft (the Gauntlet) to test whether building is the fun, and a satisfaction pass:
+- streak callouts and climbing audio
+- ultimate slow motion, flash and banner
+- a generated beat that intensifies late
+- a match-end freeze and confetti
 
-Done when: Yousuf has played at least 20 matches across the input variants and chosen one. If none is fun, stop and propose new input designs before continuing. Do not build the run loop on an input that is not fun.
+Done when: Yousuf has played the Gauntlet and says matches are satisfying and drafting is fun. If not, stop and propose new designs before continuing.
 
 ### Phase 3: the run (fun gate, MVP)
 
@@ -542,7 +540,7 @@ Done when: every Core has at least two distinct winning build styles according t
 ### Phase 5: feel and polish
 
 - Full audio: scales per side, generated beat, final-seconds layers, stingers.
-- Second juice pass, reduce-motion and high-contrast settings, redirect assist.
+- Second juice pass, reduce-motion and high-contrast settings, auto-play.
 - Desktop and landscape layout. Safe-area handling. Haptics.
 - Performance pass on a real phone, with a worst-case build.
 - App icon, splash and a simple logo, all generated from SVG.

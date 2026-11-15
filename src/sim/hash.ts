@@ -43,8 +43,12 @@ export function hashWorld(world: World): number {
     h.f64(r.dx);
     h.f64(r.dy);
     h.u32(r.cell);
+    h.f64(r.lastX);
+    h.f64(r.lastY);
     h.f64(r.bx);
     h.f64(r.by);
+    h.f64(r.spinLeft);
+    h.f64(r.spinReach);
     h.byte(r.swinging ? 1 : 0);
   }
   for (const s of world.sides) {
@@ -52,8 +56,8 @@ export function hashWorld(world: World): number {
     h.u32(s.captures);
     h.f64(s.stacks);
     h.u32(s.overflow);
-    h.u32(s.charges);
-    h.u32(s.chargeSteps);
+    h.u32(s.ultimates);
+    h.u32(s.ultimatesUsed);
     h.u32(s.surgeSteps);
     h.u32(s.shieldSteps);
     h.u32(s.pickups);

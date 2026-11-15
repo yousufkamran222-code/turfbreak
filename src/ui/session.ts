@@ -1,79 +1,87 @@
 import { signal } from '@preact/signals';
 import type { Synth } from '../audio/synth';
-import type { InputVariant } from '../content/inputs';
 import { tuning } from '../content/tuning';
 import { FixedStepper } from '../loop';
 import { Juice } from '../render/juice';
-import { ArenaRenderer, sidePalette } from '../render/renderer';
-import type { CoreDef } from '../sim/abilities';
+import { ArenaRenderer, sidePalette, type Overlay } from '../render/renderer';
+import type { CoreDef, ModPick } from '../sim/abilities';
 import type { EndReason } from '../sim/events';
-import { cooldownSteps, queueInput, type ControllerSpec } from '../sim/input';
+import { canUltimate, primaryOf, queueInput, type ControllerSpec } from '../sim/input';
 import { stepWorld } from '../sim/step';
 import { createWorld, type Phase, type SideIndex, type World } from '../sim/world';
 import { sideLook } from './sides';
 
 const RUNNER_SLOTS = tuning.runner.maxPerSide * 2;
 const SPS = tuning.sim.stepsPerSecond;
+const J = tuning.juice;
 
 export interface SessionConfig {
   seed: number;
   cores: readonly [CoreDef, CoreDef];
-  variant: InputVariant;
-  /** Rival controller, or null for a rival that never uses the input. */
+  mods: readonly [readonly ModPick[], readonly ModPick[]];
+  /** Rival controller, or null for a rival that never aims or fires its ultimate. */
   rival: ControllerSpec | null;
-  /** When set, the game plays the player's input with this controller (redirect assist). */
+  /** When set, the game plays the player's side with this controller (auto-play). */
   assist: ControllerSpec | null;
 }
 
+export type Stage = 'aiming' | 'playing' | 'freeze' | 'result';
+
 /** Live values the HUD reads. Signals only notify when a value actually changes. */
-export function createHud() {
+export function createHud(modCounts: readonly [number, number]) {
   return {
     counts: [signal(0), signal(0)] as const,
     stacks: [signal(0), signal(0)] as const,
-    runners: [signal(1), signal(1)] as const,
     /** Bumped each time a Core triggers, so the HUD can flash its counter. */
     triggers: [signal(0), signal(0)] as const,
+    /** Per Mod slot, bumped each time that Mod fires. */
+    modTriggers: [
+      Array.from({ length: modCounts[0] }, () => signal(0)),
+      Array.from({ length: modCounts[1] }, () => signal(0)),
+    ] as const,
     /** Bumped on each lead change, so the territory bar can thump. */
     leadPulse: signal(0),
     secondsLeft: signal<number>(tuning.match.durationSeconds),
-    countdown: signal<number>(tuning.match.countdownSeconds),
+    stage: signal<Stage>('aiming'),
+    aimLeft: signal<number>(tuning.match.aimSeconds),
     phase: signal<Phase>('running'),
     winner: signal<SideIndex | -1>(-1),
     endReason: signal<EndReason | null>(null),
     leadChanges: signal(0),
-    /** Player redirect gauge from 0 to 1, and whether a charge is ready. */
-    gauge: signal(1),
-    gaugeReady: signal(true),
-    /** Active pickup effects per side, for the chips under each card. */
+    ultimateReady: signal(true),
+    /** Bumped when an ultimate fires, with the side, for the banner. */
+    ultimateBanner: signal<{ side: SideIndex; n: number } | null>(null),
     effects: [signal(''), signal('')] as const,
-    /** Show the one-line input prompt (MASTER_PROMPT 6.6). */
-    prompt: signal(false),
     speed: signal<1 | 2>(1),
   };
 }
 export type Hud = ReturnType<typeof createHud>;
 
 /**
- * One match on screen: owns the world, steps it at a fixed rate, renders with
- * interpolation, feeds juice and audio from the event queue, turns taps into
- * input records and pushes HUD values. Pauses when the platform pauses.
+ * One match on screen: aiming, then the watched match. Owns the world, steps it
+ * at a fixed rate, renders with interpolation, feeds juice and audio from the
+ * event queue and pushes HUD values. Pauses when the platform pauses.
  */
 export class MatchSession {
   readonly world: World;
-  readonly hud = createHud();
+  readonly hud: Hud;
   private readonly renderer: ArenaRenderer;
   private readonly juice: Juice;
   private readonly stepper = new FixedStepper(SPS, tuning.sim.maxStepsPerFrame);
   private readonly prevX = new Float64Array(RUNNER_SLOTS + 8);
   private readonly prevY = new Float64Array(RUNNER_SLOTS + 8);
-  private countdown: number = tuning.match.countdownSeconds;
+  private readonly overlay: Overlay = { aim: null, flash: 0 };
+  private aim: { dx: number; dy: number } | null = null;
+  private aimLeft: number = tuning.match.aimSeconds;
   private last = 0;
   private clock = 0;
   private raf = 0;
   private paused = false;
-  private playerUsedInput = false;
-  private lastUrgentSecond = -1;
-  private endPlayed = false;
+  private slowLeft = 0;
+  private freezeLeft = 0;
+  private readonly streak = [0, 0];
+  private readonly lastCapture = [-Infinity, -Infinity];
+  private readonly milestone = [0, 0];
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -83,14 +91,17 @@ export class MatchSession {
     this.world = createWorld({
       seed: cfg.seed,
       cores: cfg.cores,
-      inputMode: cfg.variant.mode,
+      mods: cfg.mods,
       controllers: [cfg.assist, cfg.rival],
     });
+    this.hud = createHud([cfg.mods[0].length, cfg.mods[1].length]);
     this.renderer = new ArenaRenderer(canvas, [
       sidePalette(sideLook(cfg.cores, 0).color),
       sidePalette(sideLook(cfg.cores, 1).color),
     ]);
     this.juice = new Juice(this.world.arena.cellCount, cfg.seed);
+    const r = primaryOf(this.world, 0);
+    if (r && !cfg.assist) this.aim = { dx: r.dx, dy: r.dy };
     this.syncPrev(0);
     this.pushHud();
   }
@@ -104,35 +115,57 @@ export class MatchSession {
   start(): void {
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
+    // Auto-play skips aiming: the controller aims on the first step.
+    if (this.cfg.assist) this.launch();
   }
 
   stop(): void {
     cancelAnimationFrame(this.raf);
+    this.synth.stopBeat();
   }
 
   setPaused(paused: boolean): void {
     this.paused = paused;
     this.last = performance.now();
     this.stepper.reset();
-    if (paused) this.synth.suspend();
-    else this.synth.resume();
+    if (paused) {
+      this.synth.stopBeat();
+      this.synth.suspend();
+    } else {
+      this.synth.resume();
+      if (this.hud.stage.value === 'playing') this.synth.startBeat();
+    }
   }
 
   toggleSpeed(): void {
     this.hud.speed.value = this.hud.speed.value === 1 ? 2 : 1;
   }
 
-  /** A tap on the arena at arena coordinates. */
-  press(x: number, y: number): void {
-    if (this.cfg.assist || this.world.phase === 'ended') return;
-    const mode = this.world.inputMode;
-    if (mode === 'redirect') {
-      if (this.world.sides[0].charges <= 0) return;
-      queueInput(this.world, { side: 0, type: 'redirect', x, y });
-      this.playerUsedInput = true;
-    }
+  /** While aiming, point the launch from the player's runner toward (x, y) in arena units. */
+  aimAt(x: number, y: number): void {
+    if (this.hud.stage.value !== 'aiming' || this.cfg.assist) return;
+    const r = primaryOf(this.world, 0);
+    if (!r) return;
+    const dx = x - r.x;
+    const dy = y - r.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 20) return;
+    this.aim = { dx: dx / len, dy: dy / len };
   }
 
+  /** Release the launch (from a finger lift, or when aiming time runs out). */
+  launch(): void {
+    if (this.hud.stage.value !== 'aiming') return;
+    if (this.aim && !this.cfg.assist) queueInput(this.world, { side: 0, type: 'launch', dx: this.aim.dx, dy: this.aim.dy });
+    this.hud.stage.value = 'playing';
+    this.synth.launch();
+    this.synth.startBeat();
+  }
+
+  fireUltimate(): void {
+    if (this.cfg.assist || this.hud.stage.value !== 'playing' || !canUltimate(this.world, 0)) return;
+    queueInput(this.world, { side: 0, type: 'ultimate' });
+  }
 
   private syncPrev(from: number): void {
     const rs = this.world.runners;
@@ -143,36 +176,63 @@ export class MatchSession {
   }
 
   private readonly frame = (now: number): void => {
-    const elapsed = Math.min(0.25, (now - this.last) / 1000);
+    const realDt = Math.min(0.25, (now - this.last) / 1000);
     this.last = now;
     let alpha = 1;
     if (!this.paused) {
-      this.clock += elapsed;
+      // Slow motion stretches sim time but not the real-time timers that drive it.
+      const scale = this.slowLeft > 0 ? J.ultimateSlowScale : 1;
+      this.slowLeft = Math.max(0, this.slowLeft - realDt);
+      this.overlay.flash = Math.max(0, this.overlay.flash - realDt / J.ultimateFlashSeconds);
+      const dt = realDt * scale;
+      this.clock += dt;
       this.juice.beginFrame();
-      if (this.world.phase !== 'ended') {
-        if (this.countdown > 0) {
-          this.countdown = Math.max(0, this.countdown - elapsed);
-        } else if (this.juice.hitStop > 0) {
-          // Hit-stop: hold the sim for a few frames on a big clash.
+      const stage = this.hud.stage.value;
+      if (stage === 'aiming') {
+        this.aimLeft = Math.max(0, this.aimLeft - realDt);
+        if (this.aimLeft === 0) this.launch();
+      } else if (stage === 'playing') {
+        if (this.juice.hitStop > 0) {
           this.stepper.reset();
         } else {
-          alpha = this.stepper.advance(elapsed, this.hud.speed.value, () => {
+          alpha = this.stepper.advance(dt, this.hud.speed.value, () => {
             if (this.world.phase === 'ended' || this.juice.hitStop > 0) return;
             const before = this.world.runners.length;
             this.syncPrev(0);
             stepWorld(this.world);
-            // Runners spawned this step have no previous position yet.
             this.syncPrev(before);
             this.consumeEvents();
           });
         }
+      } else if (stage === 'freeze') {
+        this.freezeLeft -= realDt;
+        if (this.freezeLeft <= 0) this.hud.stage.value = 'result';
       }
-      this.juice.update(elapsed, this.clock);
+      this.juice.update(dt, this.clock);
     }
+    this.overlay.aim = this.hud.stage.value === 'aiming' && this.aim ? this.aim : null;
     this.render(this.world.phase === 'ended' ? 1 : alpha);
     this.pushHud();
     this.raf = requestAnimationFrame(this.frame);
   };
+
+  private onCapture(side: SideIndex, cell: number): void {
+    if (this.clock - this.lastCapture[side]! > J.streakGapSeconds) {
+      this.streak[side] = 0;
+      this.milestone[side] = 0;
+    }
+    this.lastCapture[side] = this.clock;
+    const n = ++this.streak[side]!;
+    this.synth.streakTick(side, n);
+    const next = J.streakMilestones[this.milestone[side]!];
+    if (next !== undefined && n >= next) {
+      const tier = this.milestone[side]!;
+      this.milestone[side]!++;
+      const c = this.world.arena.centroids;
+      this.juice.callout(`×${next}`, c[cell * 2]!, c[cell * 2 + 1]!, side, tier);
+      this.synth.milestone(side, tier);
+    }
+  }
 
   private consumeEvents(): void {
     const w = this.world;
@@ -183,6 +243,20 @@ export class MatchSession {
           this.hud.triggers[ev.side].value++;
           this.synth.trigger(ev.side);
           break;
+        case 'ModTriggered': {
+          const sig = this.hud.modTriggers[ev.side][ev.slot];
+          if (sig) sig.value++;
+          break;
+        }
+        case 'UltimateFired':
+          this.synth.ultimate(ev.side);
+          this.slowLeft = J.ultimateSlowSeconds * J.intensity;
+          this.overlay.flash = 1;
+          this.hud.ultimateBanner.value = { side: ev.side, n: (this.hud.ultimateBanner.value?.n ?? 0) + 1 };
+          break;
+        case 'Blast':
+          this.synth.blast();
+          break;
         case 'WallBounce':
           this.synth.hit(ev.side);
           break;
@@ -190,10 +264,7 @@ export class MatchSession {
           this.synth.clash();
           break;
         case 'CellCaptured':
-          this.synth.capture(ev.side);
-          break;
-        case 'Redirect':
-          if (ev.side === 0) this.synth.redirect();
+          this.onCapture(ev.side, ev.cell);
           break;
         case 'PickupCollected':
           this.synth.pickup(ev.kind === 'blast');
@@ -202,8 +273,11 @@ export class MatchSession {
           this.hud.leadPulse.value++;
           break;
         case 'MatchEnded':
-          if (!this.endPlayed) this.synth.end(ev.winner === 0);
-          this.endPlayed = true;
+          this.synth.stopBeat();
+          this.synth.end(ev.winner === 0);
+          this.juice.confetti(ev.winner, this.world.arena.size);
+          this.freezeLeft = J.endFreezeSeconds;
+          this.hud.stage.value = 'freeze';
           break;
         default:
           break;
@@ -212,7 +286,7 @@ export class MatchSession {
   }
 
   private render(alpha: number): void {
-    this.renderer.draw(this.world, this.prevX, this.prevY, alpha, this.juice, this.clock);
+    this.renderer.draw(this.world, this.prevX, this.prevY, alpha, this.juice, this.clock, this.overlay);
   }
 
   private pushHud(): void {
@@ -225,30 +299,16 @@ export class MatchSession {
       if (st.shieldSteps > 0) fx.push('SHIELD');
       h.effects[s].value = fx.join(' · ');
       h.counts[s].value = w.counts[s];
-      h.stacks[s].value = w.sides[s].stacks;
-      h.runners[s].value = w.sides[s].runnerCount;
+      h.stacks[s].value = st.stacks;
     }
     const secs = Math.max(0, Math.ceil((w.matchSteps - w.step) / SPS));
-    if (w.phase === 'running' && this.countdown === 0 && secs <= tuning.tension.urgentSeconds && secs !== this.lastUrgentSecond) {
-      this.lastUrgentSecond = secs;
-      if (secs > 0) this.synth.urgentTick();
-    }
+    this.synth.setIntense(w.phase === 'running' && secs <= tuning.tension.urgentSeconds);
     h.secondsLeft.value = secs;
-    h.countdown.value = Math.ceil(this.countdown * 2) / 2;
+    h.aimLeft.value = Math.ceil(this.aimLeft);
     h.phase.value = w.phase;
     h.winner.value = w.winner;
     h.endReason.value = w.endReason;
     h.leadChanges.value = w.leadChanges;
-    const st = w.sides[0];
-    if (w.inputMode === 'redirect') {
-      h.gaugeReady.value = st.charges > 0;
-      h.gauge.value = st.charges > 0 ? 1 : 1 - st.chargeSteps / cooldownSteps(w);
-    }
-    h.prompt.value =
-      !this.cfg.assist &&
-      this.cfg.variant.prompt !== null &&
-      !this.playerUsedInput &&
-      w.phase === 'running' &&
-      w.step >= tuning.match.promptSeconds * SPS;
+    h.ultimateReady.value = !this.cfg.assist && canUltimate(w, 0);
   }
 }

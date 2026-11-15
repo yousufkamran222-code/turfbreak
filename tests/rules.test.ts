@@ -138,3 +138,15 @@ describe('lead changes', () => {
     expect(w.leadChanges).toBe(1);
   });
 });
+
+describe('speed', () => {
+  it('is capped, so speed and hits cannot feed each other without limit', async () => {
+    const { runnerSpeed } = await import('../src/sim/step');
+    const { tuning } = await import('../src/content/tuning');
+    const w = blankWorld();
+    w.sides[0].stats.speed.mul = 1e9;
+    expect(runnerSpeed(w, w.runners[0]!)).toBe(tuning.runner.maxSpeed);
+    for (let i = 0; i < 120; i++) stepWorld(w);
+    for (const r of w.runners) expect(Number.isFinite(r.x)).toBe(true);
+  });
+});

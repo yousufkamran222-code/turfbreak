@@ -1,7 +1,6 @@
 import { tuning } from '../content/tuning';
 import { findCell } from './arena';
-import { applyRedirect, primaryOf } from './input';
-import { beamLength, runnerSpeed } from './step';
+import { applyLaunch, applyUltimate, canUltimate, primaryOf } from './input';
 import { rotateSmall } from './vec';
 import type { Runner, SideIndex, World } from './world';
 
@@ -52,99 +51,52 @@ export function scoreHeading(world: World, r: Runner, hx: number, hy: number): n
   return score;
 }
 
-const sweepStep = tuning.ai.sweepStep;
-const cosSweep = 1 - (sweepStep * sweepStep) / 2 + sweepStep ** 4 / 24;
-
-/**
- * Enemy cells a beam would pass over while swinging from its current direction to
- * trail behind heading (hx, hy). Zero for runners without a beam.
- */
-export function scoreSweep(world: World, r: Runner, hx: number, hy: number): number {
-  const length = beamLength(world, r);
-  if (length <= 0) return 0;
-  const size = world.arena.size;
-  const tx = -hx;
-  const ty = -hy;
-  const b = { dx: r.bx, dy: r.by };
-  let score = 0;
-  let hint = r.cell;
-  for (let guard = 0; guard < 16; guard++) {
-    const dot = b.dx * tx + b.dy * ty;
-    if (dot >= cosSweep) break;
-    rotateSmall(b, b.dx * ty - b.dy * tx >= 0 ? sweepStep : -sweepStep);
-    for (let d = tuning.ai.sweepSpacing; d <= length; d += tuning.ai.sweepSpacing) {
-      const x = r.x + b.dx * d;
-      const y = r.y + b.dy * d;
-      if (x < 0 || y < 0 || x > size || y > size) break;
-      hint = findCell(world.arena, x, y, hint);
-      if (world.owner[hint] !== r.side) score++;
-    }
-  }
-  return score * tuning.ai.sweepWeight;
-}
-
-function thinkRedirect(world: World, side: SideIndex): void {
+/** Pick the launch heading with the most enemy cells along its bouncing path. */
+function thinkLaunch(world: World, side: SideIndex): void {
   const spec = world.controllers[side];
-  const st = world.sides[side];
-  if (!spec || st.charges <= 0) {
-    st.aiReadyStep = -1;
-    return;
-  }
-  const sps = tuning.sim.stepsPerSecond;
-  if (st.aiReadyStep < 0) {
-    const reaction = spec.kind === 'heuristic' ? spec.reactionSeconds : 0.5;
-    st.aiReadyStep = world.step + Math.round(reaction * sps);
-    return;
-  }
-  if (world.step < st.aiReadyStep) return;
   const r = primaryOf(world, side);
-  if (!r) return;
+  if (!spec || !r) return;
   const rng = world.aiRngs[side];
-
   if (spec.kind === 'random') {
-    applyRedirect(world, side, rng.range(0, world.arena.size), rng.range(0, world.arena.size));
-    st.aiReadyStep = -1;
+    const d = rng.unitVector();
+    applyLaunch(world, side, d.x, d.y);
     return;
   }
-
-  const current = scoreHeading(world, r, r.dx, r.dy);
-  let best = current;
+  let best = -1;
   let bx = r.dx;
   let by = r.dy;
   for (const [hx, hy] of HEADINGS) {
-    const s = scoreHeading(world, r, hx, hy) + scoreSweep(world, r, hx, hy);
+    const s = scoreHeading(world, r, hx, hy);
     if (s > best) {
       best = s;
       bx = hx;
       by = hy;
     }
-  }
-  // Race for a pickup when it is worth more than the best open heading and reachable in time.
-  const speed = runnerSpeed(world, r);
-  for (const p of world.pickups) {
-    const dx = p.x - r.x;
-    const dy = p.y - r.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 1e-6) continue;
-    if (world.step + (dist / speed) * tuning.sim.stepsPerSecond >= p.expiresStep) continue;
-    const hx = dx / dist;
-    const hy = dy / dist;
-    const s = tuning.ai.pickupValue - dist / tuning.ai.pickupDistanceCost + scoreHeading(world, r, hx, hy) + scoreSweep(world, r, hx, hy);
-    if (s > best) {
-      best = s;
-      bx = hx;
-      by = hy;
-    }
-  }
-  if (best - current < spec.minGain) {
-    st.aiReadyStep = world.step + Math.round(tuning.ai.recheckSeconds * sps);
-    return;
   }
   const aim = { dx: bx, dy: by };
   rotateSmall(aim, rng.range(-spec.aimError, spec.aimError));
-  const reach = tuning.ai.rayLength;
-  applyRedirect(world, side, r.x + aim.dx * reach, r.y + aim.dy * reach);
-  st.aiReadyStep = -1;
+  applyLaunch(world, side, aim.dx, aim.dy);
+}
+
+/** Fire the ultimate when the Core says the moment is good, or before the deadline regardless. */
+function thinkUltimate(world: World, side: SideIndex): void {
+  const spec = world.controllers[side];
+  if (!spec || !canUltimate(world, side)) return;
+  const sps = tuning.sim.stepsPerSecond;
+  const st = world.sides[side];
+  if (spec.kind === 'random') {
+    // Pick a moment once, from this side's stream, and fire then.
+    if (st.aiUltimateStep < 0) st.aiUltimateStep = Math.round(world.aiRngs[side].range(2, 32) * sps);
+    if (world.step >= st.aiUltimateStep) applyUltimate(world, side);
+    return;
+  }
+  const check = Math.max(1, Math.round(tuning.ai.ultimateCheckSeconds * sps));
+  if (world.step % check !== 0) return;
+  const deadline = world.matchSteps - tuning.ai.ultimateDeadlineSeconds * sps;
+  const u = st.core.ultimate;
+  if (world.step >= deadline || world.phase === 'suddenDeath' || u.value(world, side) >= u.threshold * spec.patience) {
+    applyUltimate(world, side);
+  }
 }
 
 /** Let built-in controllers act. Runs inside the step, so it is deterministic. */
@@ -152,6 +104,7 @@ export function runControllers(world: World): void {
   if (world.phase === 'ended') return;
   for (const s of [0, 1] as const) {
     if (!world.controllers[s]) continue;
-    if (world.inputMode === 'redirect') thinkRedirect(world, s);
+    if (world.step === 1 && !world.sides[s].launched) thinkLaunch(world, s);
+    thinkUltimate(world, s);
   }
 }

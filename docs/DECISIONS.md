@@ -2,6 +2,27 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-15: Phase 2, after the second fun-gate play test
+
+Yousuf's verdict on the redirect build: "doesn't feel satisfying or fun at all", and lose the redirect; "the game should be simple yet extremely satisfying and fun". His choices: in-match input is a combination of a launch aim and a once-per-match ultimate (mostly watching); next comes a satisfaction pass plus a mini draft; pickups stay in the arena and their effects also become Mods.
+
+- **Redirect removed.** The tap-to-redirect is gone along with its cooldown, rules, controllers, tests and UI. Old (5.4): one redirect on a 5 s cooldown. New: aim the launch before each match, plus one ultimate per match. Agency moves to the draft, as in Super Auto Pets.
+- **Ultimates per Core.** Ricochet **Spin**: the beam sweeps one full circle, capped at 300 long (uncapped, Spin decided matches early). Splitter **Burst**: one split per 3 owned, at least one (a flat 2–3 splits early made Splitter win about 86%). A Charge pickup restores the ultimate (it is now rarer, weight 1).
+- **Ricochet's beam swings after every hit again,** as an explicit Core behaviour (`swingBeam`), not a world default. With no steering it is the Core's spectacle rather than noise competing with input. Values: beam +40 per hit (start 60); Splitter splits every 8 hits.
+- **Pickups:** any runner grabs them, and beams snag them. With splits grabbing, pickups swung Ricochet vs Splitter from 57% to 35%; letting beams snag them restored about 49%.
+- **Mods, first version (9):** Overclock, Growth Spurt, Chain Reaction, Afterburner, Shockwave, Bulwark, Magnet, Encore and Head Start, with three levels each. Hooks fire Core first, then Mods in slot order. The Head Start and Growth Spurt numbers were cut from the brief's after the Mod-impact report (see PROGRESS).
+- **Gauntlet:** a five-round mini draft (pick a Core, draft 1 of 3 before every match, rivals get the same number of random picks). It tests whether building is the fun. It is not Phase 3's run (no hearts, bosses or saves).
+- **Satisfaction pass:**
+  - drag-to-aim with a bouncing preview
+  - the ultimate button with slow motion, flash, banner and shockwave
+  - capture-streak ticks that climb, with ×10/×25/×50/×100 callouts, chords and shake
+  - a generated beat that gains layers in the last 10 s
+  - a match-end freeze, confetti and a result drop-in
+- **Speed cap and additive overflow (bug fix).** Speed feeds hits and hits feed speed (Overclock, overflow), so speed reached about 10¹⁷ and late Splitter swarms jittered at the walls. Runner speed is now capped at 1,800 units/s, and overflow adds 2% of base speed instead of multiplying. A new invariant and test cover it.
+- **Fast runners capture along their path (bug fix).** Above about 30 units per step, runners skipped cells. Captures now sample along the whole step.
+- **Match-start events reach the first step (bug fix).** Head Start's trigger was being cleared before the HUD saw it.
+- **"Decided early" lab metric** now requires that the side that passed 70% before half time also won. With big sweeps, sides often pass 70% and still lose.
+
 ## 2026-11-15: Phase 2, after the first fun-gate play test
 
 Yousuf's feedback: matches felt too random because of Ricochet's beam, which made it hard to see whether inputs mattered. He suggested temporary upgrades during a match. His choices: beam sweeps only on redirect; pickups grabbed by steering; Redirect (5 s) as the input.
