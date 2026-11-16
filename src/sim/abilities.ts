@@ -66,6 +66,10 @@ export interface AbilityContext {
   secondsLeft(): number;
   /** Cells this side owns minus cells the enemy owns. */
   lead(): number;
+  /** Grow the Core's signature by `factor` (1.25 = 25% more). Each Core decides what that means via `onBoost`. */
+  boostCore(factor: number): void;
+  /** Make the ultimate ready again. */
+  grantUltimate(): void;
   /** Fire the Core's ultimate effect again in `seconds` (Encore). Does not use up a charge. */
   echoUltimate(seconds: number): void;
   /** Announce that the Core or the Mod running this hook just fired, so the HUD can flash it. */
@@ -79,6 +83,11 @@ export interface CoreHooks {
   onCapture?(ctx: AbilityContext, cell: number): void;
   /** One of this side's cells was just taken by the enemy. */
   onCellLost?(ctx: AbilityContext, cell: number): void;
+  /**
+   * A Mod asked the Core to grow its signature by `factor` (Compound, Echo, Buzzer Beater).
+   * Every Core must implement this so those Mods work with it.
+   */
+  onBoost?(ctx: AbilityContext, factor: number): void;
   /** The Core's ultimate. Fires when the side uses it (once per match unless a pickup or Mod says otherwise). */
   onUltimate?(ctx: AbilityContext): void;
 }
@@ -127,6 +136,10 @@ export interface ModHooks {
   onHit?(ctx: AbilityContext, hit: HitInfo, level: number): void;
   onCapture?(ctx: AbilityContext, cell: number, level: number): void;
   onCellLost?(ctx: AbilityContext, cell: number, level: number): void;
+  /** The Core's signature just fired (the Core called `triggered()`). */
+  onCoreTrigger?(ctx: AbilityContext, level: number): void;
+  /** One of this side's runners grabbed a pickup of the given kind id. */
+  onPickup?(ctx: AbilityContext, kind: string, level: number): void;
   /** Every step. Keep it cheap: use it for "while behind" style conditions. */
   onStep?(ctx: AbilityContext, level: number): void;
   /** The lead changed hands; `ahead` is whether this side now leads. */

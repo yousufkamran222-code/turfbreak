@@ -47,6 +47,13 @@ function apply(world: World, side: SideIndex, defIndex: number, x: number, y: nu
   const def = world.pickupDefs[defIndex]!;
   const st = world.sides[side];
   st.pickups++;
+  for (let i = 0; i < st.mods.length; i++) {
+    const m = st.mods[i]!;
+    if (!m.mod.hooks.onPickup) continue;
+    world.currentMod = i;
+    m.mod.hooks.onPickup(world.contexts[side], def.id, m.level);
+  }
+  world.currentMod = -1;
   const e = def.effect;
   switch (e.kind) {
     case 'surge':

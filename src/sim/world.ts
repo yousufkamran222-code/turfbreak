@@ -37,7 +37,8 @@ export interface Runner {
   swinging: boolean;
 }
 
-export const STAT_NAMES = ['speed', 'bodyRadius', 'captureRadius', 'beamLength'] as const;
+/** `triggerDiscount` lowers a Core's "every N hits" thresholds (Hair Trigger); Cores must honour it. */
+export const STAT_NAMES = ['speed', 'bodyRadius', 'captureRadius', 'beamLength', 'triggerDiscount'] as const;
 export type StatName = (typeof STAT_NAMES)[number];
 
 export interface Stat {
@@ -190,6 +191,7 @@ function makeStats(): Record<StatName, Stat> {
     bodyRadius: { base: tuning.runner.bodyRadius, add: 0, mul: 1 },
     captureRadius: { base: tuning.runner.captureRadius, add: 0, mul: 1 },
     beamLength: { base: 0, add: 0, mul: 1 },
+    triggerDiscount: { base: 0, add: 0, mul: 1 },
   };
 }
 
@@ -389,6 +391,24 @@ function makeContext(world: () => World, side: SideIndex): AbilityContext {
       }
       s.triggers++;
       emit(w, { type: 'CoreTriggered', step: w.step, side, stacks: s.stacks });
+      for (let i = 0; i < s.mods.length; i++) {
+        const m = s.mods[i]!;
+        if (!m.mod.hooks.onCoreTrigger) continue;
+        w.currentMod = i;
+        m.mod.hooks.onCoreTrigger(this, m.level);
+      }
+      w.currentMod = -1;
+    },
+    boostCore(factor) {
+      const w = world();
+      const mod = w.currentMod;
+      w.currentMod = -1;
+      st().core.hooks.onBoost?.(this, factor);
+      w.currentMod = mod;
+    },
+    grantUltimate() {
+      const s = st();
+      s.ultimates = Math.max(s.ultimates, 1);
     },
   };
 }
