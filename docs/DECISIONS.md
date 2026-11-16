@@ -2,6 +2,25 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-16: Autonomous build-out (Stages A–D)
+
+Yousuf asked for several hours of autonomous work to bring the game to "complete per the planning docs", with decisions made without him and recorded here, and with cheaper agents used for implementation and playtesting. The working plan and interface contracts are in `STAGE_PLAN.md`.
+
+### Process
+- **Fun gate treated as passed for building, not for shipping.** Yousuf never played the Gauntlet build before asking for the build-out. Agent playtests (Playwright runs, screenshots, lab numbers) stand in between stages. They can find bugs, confusion, pacing and balance problems; they cannot confirm fun. His own play test of the result is still required.
+- **Phases 3 and 4 merged into Stage A.** Building four Cores and sixteen Mods first and then the rest would mean tuning rivals and runs twice. Stage A ships all 8 Cores and 30 Mods at once.
+- **Parallel agents in git worktrees,** each owning disjoint files, coding against the contracts in `STAGE_PLAN.md`. Numbers live in each Core's or Mod's own definition so they do not collide in `tuning.ts`.
+
+### Sim API (groundwork for Stage A)
+- **Timers:** `ctx.after(seconds, fn)` replaces the Encore-only echo queue. Timers keep the identity of the hook that set them.
+- **Per-cell shields and locks:** shield points absorb one capture attempt each, with a 0.3 s pause between attempts so a runner sitting on a cell does not burn through them in two steps. Locks make a cell untakeable until a step.
+- **Also added:** teleport, steer (capped at 0.3 rad per call, no trig), `slowEnemy`, `cedeCells`, `boostCore` (each Core defines what "grow your signature by a factor" means, so Compound, Echo and Buzzer Beater work with every Core), `grantUltimate`, a `triggerDiscount` stat for Hair Trigger, Mod hooks `onCellLost`, `onCoreTrigger`, `onPickup`, `onStep`, `onLeadChange`, and `ModDef.run()` for economy Mods.
+- **Match twists** (`MatchConfig.twist`): extra primaries, start share, start shields, duration, pickup rate. Bosses use these instead of new arena geometry (the brief's shrinking arena and wall cells would need collision changes for little gain).
+- **Design changes from the brief's Core table:**
+  - **Leech** no longer "steals a share of the enemy Core's stacks": stacks mean different things per Core, so a generic steal has no sensible effect. It now hunts: it steers toward the enemy primary, and each clash gives it permanent speed and slows the enemy.
+  - **Phantom** blasts a small radius where it lands, so a jump is visible and worth something by itself.
+- **Mods dropped from the brief's list:** Mirror Shard (copying another Core's signature at half strength needs every Core written twice) and the redirect-group Mods. Added in their place: Hoarder, Second Wind, Comeback, Quick Hands (ultimate recharge).
+
 ## 2026-11-15: Phase 2, after the second fun-gate play test
 
 Yousuf's verdict on the redirect build: "doesn't feel satisfying or fun at all", and lose the redirect; "the game should be simple yet extremely satisfying and fun". His choices: in-match input is a combination of a launch aim and a once-per-match ultimate (mostly watching); next comes a satisfaction pass plus a mini draft; pickups stay in the arena and their effects also become Mods.

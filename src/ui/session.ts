@@ -257,6 +257,19 @@ export class MatchSession {
         case 'Blast':
           this.synth.blast();
           break;
+        case 'ShieldHit':
+          this.synth.shieldHit();
+          break;
+        case 'Teleport': {
+          this.synth.teleport();
+          // A teleported runner must not be drawn sliding across the map between two frames.
+          const i = w.runners.findIndex((r) => r.id === ev.runner);
+          if (i >= 0) {
+            this.prevX[i] = ev.x;
+            this.prevY[i] = ev.y;
+          }
+          break;
+        }
         case 'WallBounce':
           this.synth.hit(ev.side);
           break;

@@ -77,6 +77,16 @@ export class Juice {
         this.trauma += 0.6 * k;
         break;
       }
+      case 'ShieldHit': {
+        const cen = world.arena.centroids;
+        this.rings.push({ x: cen[ev.cell * 2]!, y: cen[ev.cell * 2 + 1]!, t: now, color: ev.owner, from: 34, to: 10, dur: 0.22 });
+        break;
+      }
+      case 'Teleport':
+        this.rings.push({ x: ev.fromX, y: ev.fromY, t: now, color: ev.side, from: 50, to: 6, dur: 0.3 });
+        this.rings.push({ x: ev.x, y: ev.y, t: now, color: ev.side, from: 6, to: 90, dur: 0.35 });
+        this.sparks(ev.x, ev.y, ev.side, Math.round(12 * k), 360);
+        break;
       case 'Blast':
         this.rings.push({ x: ev.x, y: ev.y, t: now, color: ev.side, from: 20, to: ev.radius, dur: 0.4 });
         this.sparks(ev.x, ev.y, ev.side, Math.round(14 * k), 380);

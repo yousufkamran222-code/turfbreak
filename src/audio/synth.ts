@@ -155,6 +155,15 @@ export class Synth {
     [0, 7, 12, 16, 19].forEach((n, i) => this.tone(midiToHz(base + n), 0.6, 'sawtooth', 0.06, 0.05 + i * 0.03));
   }
 
+  shieldHit(): void {
+    this.tone(1900, 0.06, 'triangle', 0.05);
+  }
+
+  teleport(): void {
+    this.tone(1400, 0.08, 'sine', 0.1);
+    this.tone(700, 0.12, 'sine', 0.1, 0.05);
+  }
+
   blast(): void {
     this.noise(0.4, 0.3, 1200, 120);
     this.tone(60, 0.35, 'sine', 0.25);

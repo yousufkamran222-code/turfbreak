@@ -141,6 +141,21 @@ export class ArenaRenderer {
       for (let i = 0; i < owner.length; i++) if (owner[i] === s) c.fill(this.cellPaths[i]!);
     }
 
+    // Shields: per-cell shield points brighten the cell; a side-wide Shield makes the whole side shimmer.
+    const cs = world.cellShield;
+    c.fillStyle = 'rgba(255, 255, 255, 0.16)';
+    for (let i = 0; i < owner.length; i++) {
+      if (cs[i]! > 0) {
+        c.fill(this.cellPaths[i]!);
+        if (cs[i]! > 1) c.fill(this.cellPaths[i]!);
+      }
+    }
+    for (const s of [0, 1] as const) {
+      if (world.sides[s].shieldSteps <= 0) continue;
+      c.fillStyle = `rgba(255, 255, 255, ${(0.1 + 0.06 * Math.sin(now * 10)).toFixed(3)})`;
+      for (let i = 0; i < owner.length; i++) if (owner[i] === s) c.fill(this.cellPaths[i]!);
+    }
+
     // Thin, lighter cell edges.
     c.strokeStyle = 'rgba(255, 255, 255, 0.10)';
     c.lineWidth = 1.2 * unit;

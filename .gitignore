@@ -8,3 +8,6 @@ coverage/
 *.jks
 *.keystore
 !android/app/debug.keystore
+
+# Agent worktrees
+.claude/worktrees/
