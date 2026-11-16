@@ -13,6 +13,8 @@ export type SimEvent =
   | { type: 'RunnerOverflow'; step: number; side: SideIndex; overflow: number }
   | { type: 'LeadChange'; step: number; leader: SideIndex }
   | { type: 'SuddenDeath'; step: number }
+  | { type: 'ShieldHit'; step: number; cell: number; owner: SideIndex }
+  | { type: 'Teleport'; step: number; side: SideIndex; runner: number; fromX: number; fromY: number; x: number; y: number }
   | { type: 'ModTriggered'; step: number; side: SideIndex; slot: number }
   | { type: 'UltimateFired'; step: number; side: SideIndex; echo: boolean }
   | { type: 'Blast'; step: number; side: SideIndex; x: number; y: number; radius: number }

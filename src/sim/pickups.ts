@@ -114,7 +114,7 @@ export function updatePickups(world: World, capture: CaptureFn): void {
   }
   if (world.step >= world.nextPickupStep) {
     if (world.pickups.length < tuning.pickups.maxOnMap) spawn(world);
-    world.nextPickupStep = world.step + Math.round(tuning.pickups.everySeconds * SPS);
+    world.nextPickupStep = world.step + world.pickupEverySteps;
   }
 
   if (world.pickups.length === 0) return;

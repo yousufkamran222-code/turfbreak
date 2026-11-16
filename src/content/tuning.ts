@@ -65,6 +65,10 @@ export const tuning = {
     /** A new leader must be ahead by this many cells before it counts as a lead change. */
     leadHysteresis: 3,
   },
+  shield: {
+    /** After a shielded cell absorbs a capture attempt, further attempts on it are ignored for this long. */
+    absorbSeconds: 0.3,
+  },
   pickups: {
     /** First spawn, then one every few seconds while fewer than `maxOnMap` are out. */
     firstSeconds: 3,
