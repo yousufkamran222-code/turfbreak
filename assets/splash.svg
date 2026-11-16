@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <rect width="2732" height="2732" fill="#0b0d12"/>
+  <g transform="translate(1366 1280) scale(.42) translate(-512 -512)">
+    <path d="M40 40H560L470 210L600 400L430 560L540 760L440 984H40Z" fill="#ff3355"/>
+    <path d="M560 40H984V984H440L540 760L430 560L600 400L470 210Z" fill="#7a3cff"/>
+    <path d="M560 40L470 210L600 400L430 560L540 760L440 984" fill="none" stroke="#fff" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M250 512H640" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
+    <path d="M690 400L802 512L690 624L578 512Z" fill="#ff3355" stroke="#fff" stroke-width="34" stroke-linejoin="round"/>
+  </g>
+  <text x="1366" y="1640" text-anchor="middle" font-family="system-ui, Arial, sans-serif" font-weight="900" font-size="150" letter-spacing="22" fill="#e8ebf2">TURFBREAK</text>
+</svg>
