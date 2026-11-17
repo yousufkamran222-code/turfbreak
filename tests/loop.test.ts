@@ -29,4 +29,26 @@ describe('FixedStepper', () => {
     s.advance(0, 1, () => steps++);
     expect(steps).toBe(0);
   });
+
+  it('keeps the steps a refusing callback did not use (hit-stop at 2x loses no time)', () => {
+    const s = new FixedStepper(60, 8);
+    let steps = 0;
+    s.advance(2.05 / 60, 2, () => {
+      steps++;
+      return steps < 2 ? true : false;
+    });
+    expect(steps).toBe(2);
+    // 4 steps were due; one ran, the refused one and the rest stay owed, not burned.
+    let more = 0;
+    s.advance(0, 2, () => void more++);
+    expect(more).toBe(3);
+  });
+
+  it('keeps advancing at every speed after any toggle sequence', () => {
+    const s = new FixedStepper(60, 8);
+    let steps = 0;
+    const speeds = [1, 2, 1, 2, 2, 1];
+    for (let i = 0; i < 600; i++) s.advance(1 / 60, speeds[i % speeds.length]!, () => void steps++);
+    expect(steps).toBeGreaterThan(700);
+  });
 });

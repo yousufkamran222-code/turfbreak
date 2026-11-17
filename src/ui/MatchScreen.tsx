@@ -9,6 +9,8 @@ import type { MatchOutcome } from './game';
 import { Hud as HudView } from './Hud';
 import { MatchSession, type SessionConfig } from './session';
 import { sideLook } from './sides';
+import { SidePanel } from './SidePanels';
+import { tuning } from '../content/tuning';
 import { replayCodeOf, replayUrl, resultLabel, shareOrCopy, useFlash } from './share';
 
 interface Props {
@@ -37,6 +39,8 @@ interface Props {
   neutral?: boolean;
   /** Offer replay code and clip buttons on the result. Default true. */
   exportable?: boolean;
+  /** Show the seed in the footer (Debug quick match and Versus Lab only). */
+  showSeed?: boolean;
 }
 
 const reasonText: Record<EndReason, string> = {
@@ -150,6 +154,12 @@ export function MatchScreen(props: Props) {
   const reason = hud?.endReason.value ?? null;
   const banner = hud?.ultimateBanner.value ?? null;
   const ready = hud?.ultimateReady.value ?? false;
+  const wait = hud?.ultimateWait.value ?? 0;
+  const ult = cores[0].ultimate;
+  const ultReady = ready && stage === 'playing';
+  const ultSub = ultReady ? ult.description : stage === 'aiming' ? 'Ready after launch' : wait > 0 ? `Ready in ${wait}s` : 'Used';
+  const ultName = ultReady ? `TAP: ${ult.name.toUpperCase()}` : ult.name.toUpperCase();
+  const tags = props.neutral || props.replay ? (['SIDE A', 'SIDE B'] as const) : (['YOU', 'RIVAL'] as const);
 
   const exportCode = (): { code: string; url: string | null } | null => {
     if (!session) return null;
@@ -179,18 +189,14 @@ export function MatchScreen(props: Props) {
   };
 
   return (
-    <main class="match" style={{ '--side-a': looks[0].color, '--side-b': looks[1].color }}>
+    <main class="match-wrap" style={{ '--side-a': looks[0].color, '--side-b': looks[1].color }}>
+      {hud && <SidePanel hud={hud} side={0} core={cores[0]} look={looks[0]} mods={mods[0]} tag={tags[0]} />}
+      <div class="match">
       {props.replay && <div class="replay-banner">REPLAY</div>}
       {props.title && <div class="match-title">{props.title}</div>}
       {hud && <HudView hud={hud} cores={cores} looks={looks} mods={mods} />}
       <div class="arena-box" ref={boxRef}>
         <canvas ref={canvasRef} class="arena" />
-        {stage === 'aiming' && !passive && (
-          <div class="prompt">
-            Drag to aim · release to launch
-            <span class="aim-left">{hud?.aimLeft.value}</span>
-          </div>
-        )}
         {banner && stage === 'playing' && (
           <div key={banner.n} class="ult-banner" style={{ color: looks[banner.side].color }}>
             {looks[banner.side].name} · {cores[banner.side].ultimate.name.toUpperCase()}!
@@ -245,21 +251,34 @@ export function MatchScreen(props: Props) {
         )}
       </div>
       {!passive && (
+        <div class="aim-row" aria-live="polite">
+          {stage === 'aiming' && (
+            <>
+              <span>Drag to aim · release to launch</span>
+              <svg class="aim-ring" viewBox="0 0 24 24" aria-label={`Launching in ${hud?.aimLeft.value ?? tuning.match.aimSeconds}`}>
+                <circle cx="12" cy="12" r="9" class="track" />
+                <circle cx="12" cy="12" r="9" class="fill" style={{ animationDuration: `${tuning.match.aimSeconds}s` }} />
+              </svg>
+            </>
+          )}
+        </div>
+      )}
+      {!passive && (
         <button
           type="button"
-          class={`ultimate ${ready && stage === 'playing' ? 'ready' : ''}`}
-          disabled={!ready || stage !== 'playing'}
+          class={`ultimate ${ultReady ? 'ready' : stage === 'aiming' ? 'pending' : 'spent'}`}
+          disabled={!ultReady}
           onClick={() => session?.fireUltimate()}
         >
-          <span class="ult-name">{cores[0].ultimate.name.toUpperCase()}</span>
-          <span class="ult-desc">{ready ? cores[0].ultimate.description : 'Used'}</span>
+          <span class="ult-name">{ultName}</span>
+          <span class="ult-desc">{ultSub}</span>
         </button>
       )}
       <footer class="match-footer">
         <button type="button" class="secondary small" id="pause" onClick={() => setPause(true)}>
           Pause
         </button>
-        <span class="seed">seed {seed}</span>
+        <span class="seed">{props.showSeed ? `seed ${seed}` : ''}</span>
         <div class="row">
           <button type="button" class="secondary small" onClick={props.onToggleMute} aria-label="Toggle sound">
             {props.muted ? 'Muted' : 'Sound'}
@@ -274,6 +293,8 @@ export function MatchScreen(props: Props) {
           )}
         </div>
       </footer>
+      </div>
+      {hud && <SidePanel hud={hud} side={1} core={cores[1]} look={looks[1]} mods={mods[1]} tag={tags[1]} log />}
       {paused && (
         <div class="overlay" role="dialog" aria-label="Paused">
           <div class="sheet">

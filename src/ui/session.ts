@@ -35,6 +35,19 @@ export interface SessionConfig {
   haptic?: ((kind: HapticKind) => void) | undefined;
 }
 
+/** One line of the desktop trigger log. */
+export interface LogEntry {
+  id: number;
+  side: SideIndex;
+  glyph: string;
+  label: string;
+}
+
+/** Quick Hands: seconds until the ultimate comes back, per level (mirrors the Mod's own numbers, for display only). */
+const QUICK_HANDS_DELAY = [24, 16, 11] as const;
+const QUICK_HANDS_CHARGES = [1, 1, 2] as const;
+const LOG_LINES = 8;
+
 export type Stage = 'aiming' | 'playing' | 'freeze' | 'result';
 
 /** Live values the HUD reads. Signals only notify when a value actually changes. */
@@ -59,6 +72,10 @@ export function createHud(modCounts: readonly [number, number]) {
     endReason: signal<EndReason | null>(null),
     leadChanges: signal(0),
     ultimateReady: signal(true),
+    /** Seconds until a Mod recharges the used ultimate; 0 when nothing will. */
+    ultimateWait: signal(0),
+    /** The last few Core and Mod triggers, newest last (desktop log). */
+    log: signal<readonly LogEntry[]>([]),
     /** Bumped when an ultimate fires, with the side, for the banner. */
     ultimateBanner: signal<{ side: SideIndex; n: number } | null>(null),
     effects: [signal(''), signal('')] as const,
@@ -96,6 +113,8 @@ export class MatchSession {
   private readonly streak = [0, 0];
   private readonly lastCapture = [-Infinity, -Infinity];
   private readonly milestone = [0, 0];
+  private logId = 0;
+  private ultimateStep = -1;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -248,16 +267,18 @@ export class MatchSession {
         if (this.aimLeft === 0) this.launch();
       } else if (stage === 'playing') {
         if (this.juice.hitStop > 0) {
-          this.stepper.reset();
+          // Frozen: the steps owed from the frame that began the hit-stop stay in the stepper.
         } else {
           alpha = this.stepper.advance(dt, this.hud.speed.value, () => {
-            if (this.world.phase === 'ended' || this.juice.hitStop > 0) return;
+            // A hit-stop that began mid-frame pauses the remaining steps instead of eating them.
+            if (this.world.phase === 'ended' || this.juice.hitStop > 0) return false;
             const before = this.world.runners.length;
             this.syncPrev(0);
             stepWorld(this.world);
             this.stats.observe(this.world);
             this.syncPrev(before);
             this.consumeEvents();
+            return true;
           });
         }
       } else if (stage === 'freeze') {
@@ -297,15 +318,19 @@ export class MatchSession {
       switch (ev.type) {
         case 'CoreTriggered':
           this.hud.triggers[ev.side].value++;
+          this.log(ev.side, '◈', this.cfg.cores[ev.side].name);
           this.synth.trigger(ev.side);
           if (ev.side === 0) this.buzz('light', 140);
           break;
         case 'ModTriggered': {
           const sig = this.hud.modTriggers[ev.side][ev.slot];
           if (sig) sig.value++;
+          const pick = this.cfg.mods[ev.side][ev.slot];
+          if (pick) this.log(ev.side, pick.mod.glyph, pick.mod.name);
           break;
         }
         case 'UltimateFired':
+          if (ev.side === 0 && !ev.echo) this.ultimateStep = w.step;
           this.synth.ultimate(ev.side);
           this.slowLeft = J.ultimateSlowSeconds * fx.intensity;
           this.overlay.flash = 1;
@@ -357,6 +382,22 @@ export class MatchSession {
     }
   }
 
+  private log(side: SideIndex, glyph: string, label: string): void {
+    const next = [...this.hud.log.value, { id: ++this.logId, side, glyph, label }];
+    this.hud.log.value = next.length > LOG_LINES ? next.slice(next.length - LOG_LINES) : next;
+  }
+
+  /** Seconds until Quick Hands returns the ultimate, or 0 when it is not coming back. */
+  private ultimateWait(): number {
+    const w = this.world;
+    if (this.ultimateStep < 0 || w.sides[0].ultimates > 0) return 0;
+    const qh = this.cfg.mods[0].find((p) => p.mod.id === 'quick-hands');
+    if (!qh) return 0;
+    const i = Math.min(2, Math.max(0, qh.level - 1));
+    if (w.sides[0].ultimatesUsed > QUICK_HANDS_CHARGES[i]!) return 0;
+    return Math.max(0, Math.ceil(QUICK_HANDS_DELAY[i]! - (w.step - this.ultimateStep) / SPS));
+  }
+
   private lastBuzz = -Infinity;
 
   /** A haptic pulse, rate-limited so a busy build does not buzz constantly. */
@@ -394,5 +435,6 @@ export class MatchSession {
     h.endReason.value = w.endReason;
     h.leadChanges.value = w.leadChanges;
     h.ultimateReady.value = !this.passive && canUltimate(w, 0);
+    h.ultimateWait.value = this.ultimateWait();
   }
 }
