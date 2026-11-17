@@ -303,14 +303,14 @@ describe('ascension', () => {
   });
 
   it('applies start rules: no rerolls, 2 hearts', () => {
-    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 2 }).rerolls).toBe(1);
-    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 3 }).rerolls).toBe(0);
-    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 5 }).hearts).toBe(3);
-    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 6 }).hearts).toBe(2);
+    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 1 }).rerolls).toBe(1);
+    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 2 }).rerolls).toBe(0);
+    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 7 }).hearts).toBe(3);
+    expect(startRun({ seed: 1, coreId: 'ricochet', ascension: 8 }).hearts).toBe(2);
   });
 
-  it('moves bosses at tier 4', () => {
-    let run = startRun({ seed: 3, coreId: 'splitter', ascension: 4 });
+  it('moves bosses at tier 3', () => {
+    let run = startRun({ seed: 3, coreId: 'splitter', ascension: 3 });
     const bossRounds: number[] = [];
     while (run.phase !== 'summary') {
       if (run.phase === 'draft') run = firstOffer(run);
@@ -329,9 +329,9 @@ describe('ascension', () => {
     expect(strength(1)).toBeGreaterThanOrEqual(strength(0));
     expect(strength(5)).toBeGreaterThan(strength(1));
     expect(strength(8)).toBeGreaterThanOrEqual(strength(5));
-    expect(pickMod(startRun({ seed: 30, coreId: 'ricochet', ascension: 1 }), null).rival!.controller).toBeNull();
-    expect(pickMod(startRun({ seed: 30, coreId: 'ricochet', ascension: 2 }), null).rival!.controller).not.toBeNull();
-    const sharp = pickMod(startRun({ seed: 30, coreId: 'ricochet', ascension: 7 }), null).rival!.controller;
+    expect(pickMod(startRun({ seed: 30, coreId: 'ricochet', ascension: 3 }), null).rival!.controller).toBeNull();
+    expect(pickMod(startRun({ seed: 30, coreId: 'ricochet', ascension: 4 }), null).rival!.controller).not.toBeNull();
+    const sharp = pickMod(startRun({ seed: 30, coreId: 'ricochet', ascension: 6 }), null).rival!.controller;
     expect(sharp).toMatchObject({ kind: 'heuristic', aimError: 0.05, patience: 1.25 });
   });
 });

@@ -2,6 +2,20 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Ascension reordered
+
+- **Old order:** rival AI from round 1 at tier 2, and 2 hearts at tier 6. That made a cliff at tier 2 (synergy run win rate 71% → 43%), and tier 8 at about 3%.
+- **New ramp, one rule per tier:**
+  1. Rivals carry +1 Mod.
+  2. No starting reroll.
+  3. Bosses on rounds 4, 7 and 10.
+  4. Rival AI from round 1.
+  5. Rival Mods +1 level.
+  6. Sharper rival AI.
+  7. Drafts offer one fewer Mod (this replaced "rivals carry another Mod").
+  8. 2 hearts.
+- **Measured** (30 runs per Core, synergy drafter): tier 4 averages 41% and tier 8 about 8% (0–23% per Core). The tier 8 lab player is a heuristic, so skilled players should do better. Bloom is the weakest Core at every tier and needs a buff.
+
 ## 2026-11-17: Stage C (retention features, Phase 6)
 
 - **Starting roster.** Old (Stage A): Ricochet, Splitter and 9 Mods. New: Ricochet, Splitter, Pulse and 14 Mods (Overclock, Growth Spurt, Chain Reaction, Shockwave, Head Start, Clash Engine, Wall Hugger, Scorched Trail, Ramparts, Underdog, Front Runner, Scavenger, Echo, Decoy); only one pickup Mod (Shockwave) is in it. Saves are merged, never trimmed: an existing save keeps everything it had and gains the new starters.
