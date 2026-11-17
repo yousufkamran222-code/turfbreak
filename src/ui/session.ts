@@ -8,9 +8,9 @@ import { ArenaRenderer, sidePalette, type Overlay } from '../render/renderer';
 import type { CoreDef, ModPick } from '../sim/abilities';
 import type { EndReason } from '../sim/events';
 import { APP_VERSION, type ReplayData } from '../meta/replay';
-import { canUltimate, primaryOf, queueInput, type ControllerSpec, type InputRecord } from '../sim/input';
+import { needsTactical, tacticalDefault, canUltimate, primaryOf, queueInput, type ControllerSpec, type InputRecord } from '../sim/input';
 import { stepWorld } from '../sim/step';
-import { createWorld, type MatchTwist, type Phase, type SideIndex, type World } from '../sim/world';
+import { createWorld, type MatchTwist, type Phase, type Ruleset, type TacticalChoice, type SideIndex, type World } from '../sim/world';
 import type { HapticKind } from '../platform/types';
 import { MatchStats } from './matchStats';
 import { sideLook } from './sides';
@@ -20,6 +20,7 @@ const SPS = tuning.sim.stepsPerSecond;
 const J = tuning.juice;
 
 export interface SessionConfig {
+  ruleset?: Ruleset;
   seed: number;
   cores: readonly [CoreDef, CoreDef];
   mods: readonly [readonly ModPick[], readonly ModPick[]];
@@ -53,6 +54,8 @@ export type Stage = 'aiming' | 'playing' | 'freeze' | 'result';
 /** Live values the HUD reads. Signals only notify when a value actually changes. */
 export function createHud(modCounts: readonly [number, number]) {
   return {
+    tactical: signal(false),
+    rechargeProgress: signal(1),
     counts: [signal(0), signal(0)] as const,
     stacks: [signal(0), signal(0)] as const,
     /** Bumped each time a Core triggers, so the HUD can flash its counter. */
@@ -123,6 +126,7 @@ export class MatchSession {
   ) {
     this.world = createWorld({
       seed: cfg.seed,
+      ruleset: cfg.ruleset ?? 'classic',
       cores: cfg.cores,
       mods: cfg.mods,
       controllers: cfg.inputs ? [null, null] : [cfg.assist, cfg.rival],
@@ -193,6 +197,7 @@ export class MatchSession {
     while (!ended() && guard++ < 200_000) {
       this.syncPrev(0);
       const before = w.runners.length;
+      if (needsTactical(w)) for (const side of [0, 1] as const) if (w.tacticalChoices[side] === null && !w.pendingInputs.some((i) => i.type === 'tactical' && i.side === side)) w.pendingInputs.push({ step: w.step, side, type: 'tactical', choice: tacticalDefault(w, side) });
       stepWorld(w);
       this.stats.observe(w);
       this.syncPrev(before);
@@ -208,6 +213,7 @@ export class MatchSession {
     return {
       version: APP_VERSION,
       seed: c.seed,
+      ruleset: c.ruleset ?? 'classic',
       cores: [c.cores[0].id, c.cores[1].id],
       builds: [c.mods[0].map(entry), c.mods[1].map(entry)],
       twist: c.twist ?? null,
@@ -237,7 +243,7 @@ export class MatchSession {
   }
 
   fireUltimate(): void {
-    if (this.passive || this.hud.stage.value !== 'playing' || !canUltimate(this.world, 0)) return;
+    if (this.paused || needsTactical(this.world) || this.passive || this.hud.stage.value !== 'playing' || !canUltimate(this.world, 0)) return;
     queueInput(this.world, { side: 0, type: 'ultimate' });
   }
 
@@ -247,6 +253,13 @@ export class MatchSession {
       this.prevX[i] = rs[i]!.x;
       this.prevY[i] = rs[i]!.y;
     }
+  }
+
+  chooseTactical(choice: TacticalChoice): void {
+    if (this.paused || !needsTactical(this.world)) return;
+    this.world.pendingInputs.push({ step: this.world.step, side: 0, type: 'tactical', choice });
+    // The next frame resolves both choices and resumes the simulation.
+    this.hud.tactical.value = false;
   }
 
   private readonly frame = (now: number): void => {
@@ -272,6 +285,22 @@ export class MatchSession {
           alpha = this.stepper.advance(dt, this.hud.speed.value, () => {
             // A hit-stop that began mid-frame pauses the remaining steps instead of eating them.
             if (this.world.phase === 'ended' || this.juice.hitStop > 0) return false;
+            if (needsTactical(this.world)) {
+              if (!this.cfg.inputs && !this.world.controllers[1] && this.world.tacticalChoices[1] === null) this.world.pendingInputs.push({ step: this.world.step, side: 1, type: 'tactical', choice: tacticalDefault(this.world, 1) });
+              // Replays with incomplete recordings recover using a deterministic fallback.
+              if (this.cfg.inputs) {
+                for (const side of [0, 1] as const) if (this.world.tacticalChoices[side] === null && !this.world.pendingInputs.some((i) => i.type === 'tactical' && i.side === side)) {
+                  this.world.pendingInputs.push({ step: this.world.step, side, type: 'tactical', choice: tacticalDefault(this.world, side) });
+                }
+              }
+              const beforeStep = this.world.step;
+              stepWorld(this.world);
+              if (this.world.step === beforeStep) { this.stepper.reset(); this.synth.stopBeat(); return false; }
+              this.synth.startBeat();
+              this.stats.observe(this.world);
+              this.consumeEvents();
+              return true;
+            }
             const before = this.world.runners.length;
             this.syncPrev(0);
             stepWorld(this.world);
@@ -435,6 +464,11 @@ export class MatchSession {
     h.endReason.value = w.endReason;
     h.leadChanges.value = w.leadChanges;
     h.ultimateReady.value = !this.passive && canUltimate(w, 0);
-    h.ultimateWait.value = this.ultimateWait();
+    const charge = w.sides[0];
+    const recharge = w.ruleset === 'recharge' && charge.ultimates === 0 && charge.rechargeAt >= 0 ? Math.max(0, (charge.rechargeAt - w.step) / SPS) : 0;
+    const modWait = this.ultimateWait();
+    h.ultimateWait.value = recharge > 0 ? Math.ceil(modWait > 0 ? Math.min(modWait, recharge) : recharge) : modWait;
+    h.rechargeProgress.value = charge.ultimates > 0 ? 1 : recharge > 0 ? 1 - recharge / tuning.agency.rechargeSeconds : 0;
+    h.tactical.value = needsTactical(w) && w.tacticalChoices[0] === null && !this.passive;
   }
 }

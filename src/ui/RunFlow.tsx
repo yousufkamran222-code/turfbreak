@@ -39,6 +39,7 @@ export function RunFlow({ game, onHome }: { game: Game; onHome(): void }) {
       const assist: ControllerSpec | null = game.settings.autoPlay ? { kind: 'heuristic', ...tuning.ai.assist } : null;
       return {
         seed: m.seed,
+        ruleset: game.ruleset,
         cores: m.cores,
         mods: m.mods ?? [[], []],
         rival: m.controllers?.[1] ?? null,

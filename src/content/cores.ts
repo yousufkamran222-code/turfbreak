@@ -273,13 +273,19 @@ export const bloom: CoreDef = {
     onMatchStart(ctx) {
       setBloomChance(ctx, bloomValues.startChance);
     },
+    onScheduled(ctx, effect) {
+      if (effect.kind !== 'core') return;
+      if (effect.action === 'spread') { if (bloomSpread(ctx, effect.cell)) ctx.triggered(); }
+      else if (effect.action === 'wave') {
+        for (const cell of frontierCells(ctx.world, ctx.side)) bloomSpread(ctx, cell);
+        ctx.triggered();
+      }
+    },
     onCapture(ctx, cell) {
       const c = ctx.counter(0);
       if (c < bloomValues.maxChance) setBloomChance(ctx, Math.min(bloomValues.maxChance, c + bloomValues.chancePerCapture));
       if (ctx.rng.next() >= ctx.counter(0)) return;
-      ctx.after(bloomValues.spreadDelay, (c2) => {
-        if (bloomSpread(c2, cell)) c2.triggered();
-      });
+      ctx.after(bloomValues.spreadDelay, { kind: 'core', action: 'spread', cell });
     },
     onUltimate(ctx) {
       const wave = (c: AbilityContext): void => {
@@ -287,7 +293,7 @@ export const bloom: CoreDef = {
         c.triggered();
       };
       wave(ctx);
-      for (let i = 1; i < bloomValues.overgrowthWaves; i++) ctx.after(bloomValues.overgrowthGap * i, wave);
+      for (let i = 1; i < bloomValues.overgrowthWaves; i++) ctx.after(bloomValues.overgrowthGap * i, { kind: 'core', action: 'wave' });
     },
     onBoost(ctx, f) {
       setBloomChance(ctx, Math.max(ctx.counter(0), Math.min(bloomValues.boostCap, ctx.counter(0) * f)));
@@ -383,11 +389,7 @@ function phantomJump(ctx: AbilityContext): void {
 
 /** Counter 0 holds the current interval. Each jump shortens it and schedules the next. */
 function phantomSchedule(ctx: AbilityContext): void {
-  ctx.after(ctx.counter(0), (c) => {
-    phantomJump(c);
-    c.setCounter(0, Math.min(c.counter(0), Math.max(phantomValues.minInterval, c.counter(0) - phantomValues.intervalStep)));
-    phantomSchedule(c);
-  });
+  ctx.after(ctx.counter(0), { kind: 'core', action: 'jump-cycle' });
 }
 
 /** Every few seconds, teleports to the enemy cell furthest from any runner and blasts it. Jumps come faster each time. */
@@ -409,13 +411,21 @@ export const phantom: CoreDef = {
     threshold: phantomValues.stormThreshold,
   },
   hooks: {
+    onScheduled(ctx, effect) {
+      if (effect.kind !== 'core') return;
+      phantomJump(ctx);
+      if (effect.action === 'jump-cycle') {
+        ctx.setCounter(0, Math.min(ctx.counter(0), Math.max(phantomValues.minInterval, ctx.counter(0) - phantomValues.intervalStep)));
+        phantomSchedule(ctx);
+      }
+    },
     onMatchStart(ctx) {
       ctx.setCounter(0, phantomValues.startInterval);
       phantomSchedule(ctx);
     },
     onUltimate(ctx) {
       phantomJump(ctx);
-      for (let k = 1; k < phantomValues.stormJumps; k++) ctx.after(k * phantomValues.stormGap, phantomJump);
+      for (let k = 1; k < phantomValues.stormJumps; k++) ctx.after(k * phantomValues.stormGap, { kind: 'core', action: 'jump' });
     },
     onBoost(ctx, f) {
       ctx.setCounter(0, Math.min(ctx.counter(0), Math.max(phantomValues.boostFloor, ctx.counter(0) / f)));
@@ -493,10 +503,7 @@ export const juggernaut: CoreDef = {
       ctx.surge(v.stampedeSpeed, v.stampedeSeconds);
       ctx.mulStat('captureRadius', v.stampedeRadius);
       syncJuggernaut(ctx);
-      ctx.after(v.stampedeSeconds, (c) => {
-        c.mulStat('captureRadius', 1 / v.stampedeRadius);
-        syncJuggernaut(c);
-      });
+      ctx.after(v.stampedeSeconds, { kind: 'restore-radius', factor: 1 / v.stampedeRadius });
       ctx.triggered();
     },
     onBoost(ctx, f) {

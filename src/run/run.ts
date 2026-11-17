@@ -17,6 +17,7 @@ import { archetypes, rivalScaling, rivalTier } from '../content/rivals';
 import { tuning } from '../content/tuning';
 import type { CoreDef, ModDef, ModPick } from '../sim/abilities';
 import type { ControllerSpec } from '../sim/input';
+import { integer, validBuild, validController, validTwist } from '../sim/validation';
 import { Rng, type RngState } from '../sim/rng';
 import type { MatchConfig, MatchTwist } from '../sim/world';
 import { MAX_LEVEL, MAX_MODS, rarityWeight } from './draft';
@@ -323,7 +324,7 @@ export function matchConfig(run: RunState): MatchConfig {
   let twist: MatchTwist | undefined = rival.twist ?? undefined;
   if (rival.extraPrimaries > 0) {
     const ex = twist?.extraPrimaries ?? [0, 0];
-    twist = { ...twist, extraPrimaries: [ex[0], ex[1] + rival.extraPrimaries] };
+    twist = { ...twist, extraPrimaries: [ex[0], Math.min(31, ex[1] + rival.extraPrimaries)] };
   }
   return {
     seed: rival.seed,
@@ -402,20 +403,14 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isStrArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
 
 function parseBuild(v: unknown): BuildEntry[] | null {
-  if (!Array.isArray(v)) return null;
-  const out: BuildEntry[] = [];
-  for (const e of v) {
-    if (!isObj(e) || typeof e.id !== 'string' || !isNum(e.level)) return null;
-    out.push({ id: e.id, level: Math.max(1, Math.min(MAX_LEVEL, Math.floor(e.level))) });
-  }
-  return out;
+  return validBuild(v, mods.map((m) => m.id)) ? v.map((e) => ({ ...e })) : null;
 }
 
 /** A stored run, checked field by field; null when it cannot be trusted or its Core no longer exists. */
 export function parseRun(v: unknown): RunState | null {
   if (!isObj(v) || v.version !== 1) return null;
   const rng = v.rng;
-  if (!isObj(rng) || !(['a', 'b', 'c', 'd'] as const).every((k) => isNum(rng[k]))) return null;
+  if (!isObj(rng) || !(['a', 'b', 'c', 'd'] as const).every((k) => integer(rng[k], -0x80000000, 0xffffffff))) return null;
   const build = parseBuild(v.build);
   if (!build || typeof v.coreId !== 'string' || !coreDef(v.coreId)) return null;
   if (!isNum(v.seed) || !isNum(v.ascension) || !isNum(v.round) || !isNum(v.hearts) || !isNum(v.rerolls)) return null;
@@ -423,27 +418,32 @@ export function parseRun(v: unknown): RunState | null {
   if (!isStrArr(v.offer) || !Array.isArray(v.history) || typeof v.endless !== 'boolean') return null;
   if (v.outcome !== null && v.outcome !== 'won' && v.outcome !== 'lost') return null;
   if (v.mode !== 'standard' && v.mode !== 'daily') return null;
+  if (!integer(v.seed, 0, 0xffffffff) || !integer(v.round, 1, 100000) || !integer(v.hearts, 0, rulesFor(v.ascension).hearts) || !integer(v.rerolls, 0, 100000)) return null;
+  if (v.offer.length > 6 || v.offer.some((id) => !modDef(id)) || new Set(v.offer).size !== v.offer.length) return null;
+  if (v.history.length > 100000 || (v.phase === 'draft' && (v.rival !== null || v.offer.length === 0 || v.outcome !== null)) ||
+      (v.phase === 'match' && (v.offer.length !== 0 || v.outcome !== null)) ||
+      (v.phase === 'summary' && (v.rival !== null || v.outcome === null || v.offer.length !== 0))) return null;
   let rival: RivalSpec | null = null;
   if (v.rival !== null) {
     const r = v.rival;
     const rm = isObj(r) ? parseBuild(r.mods) : null;
     if (!isObj(r) || !rm || typeof r.name !== 'string' || typeof r.coreId !== 'string' || !isNum(r.seed)) return null;
-    if (!coreDef(r.coreId)) return null;
+    if (!coreDef(r.coreId) || !integer(r.seed, 0, 0xffffffff) || (r.twist !== null && r.twist !== undefined && !validTwist(r.twist)) || (r.controller !== null && r.controller !== undefined && !validController(r.controller)) || (r.extraPrimaries !== undefined && !integer(r.extraPrimaries, 0, 31))) return null;
     rival = {
       name: r.name,
       coreId: r.coreId,
       mods: rm,
       seed: r.seed,
       bossId: typeof r.bossId === 'string' ? r.bossId : null,
-      twist: isObj(r.twist) ? (r.twist as MatchTwist) : null,
-      controller: isObj(r.controller) && r.controller.kind === 'heuristic' ? (r.controller as ControllerSpec) : null,
+      twist: validTwist(r.twist) ? r.twist : null,
+      controller: validController(r.controller) ? r.controller : null,
       extraPrimaries: isNum(r.extraPrimaries) ? r.extraPrimaries : 0,
     };
   }
   if (v.phase === 'match' && !rival) return null;
   const history: RoundResult[] = [];
   for (const h of v.history) {
-    if (!isObj(h) || !isNum(h.round) || typeof h.won !== 'boolean' || !isNum(h.margin)) return null;
+    if (!isObj(h) || !integer(h.round, 1, 100000) || typeof h.won !== 'boolean' || !integer(h.margin, 0, 1000)) return null;
     history.push({
       round: h.round,
       won: h.won,

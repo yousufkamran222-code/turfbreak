@@ -1,4 +1,5 @@
-import { emit, type Runner, type SideIndex, type World } from './world';
+import { tuning } from '../content/tuning';
+import { emit, type TacticalChoice, type Runner, type SideIndex, type World } from './world';
 
 /**
  * Player input enters the sim only as timestamped records (MASTER_PROMPT 4.3 rule 2).
@@ -7,7 +8,8 @@ import { emit, type Runner, type SideIndex, type World } from './world';
  */
 export type InputRecord =
   | { step: number; side: SideIndex; type: 'launch'; dx: number; dy: number }
-  | { step: number; side: SideIndex; type: 'ultimate' };
+  | { step: number; side: SideIndex; type: 'ultimate' }
+  | { step: number; side: SideIndex; type: 'tactical'; choice: TacticalChoice };
 
 /** Distributes Omit over the union, so each variant keeps its own fields. */
 type WithoutStep<T> = T extends unknown ? Omit<T, 'step'> : never;
@@ -38,7 +40,7 @@ export function applyLaunch(world: World, side: SideIndex, dx: number, dy: numbe
   if (st.launched || world.step > 1) return false;
   const r = primaryOf(world, side);
   const len = Math.sqrt(dx * dx + dy * dy);
-  if (!r || len < 1e-9) return false;
+  if (!r || !Number.isFinite(len) || len < 1e-9) return false;
   r.dx = dx / len;
   r.dy = dy / len;
   r.bx = -r.dx;
@@ -73,6 +75,7 @@ export function applyUltimate(world: World, side: SideIndex): boolean {
   const st = world.sides[side];
   st.ultimates--;
   st.ultimatesUsed++;
+  if (world.ruleset === 'recharge') st.rechargeAt = world.step + Math.round(tuning.agency.rechargeSeconds * tuning.sim.stepsPerSecond);
   world.inputLog.push({ step: world.step, side, type: 'ultimate' });
   runUltimate(world, side, false);
   return true;
@@ -85,8 +88,39 @@ export function applyPendingInputs(world: World): void {
   while (k < q.length && q[k]!.step <= world.step) {
     const inp = q[k]!;
     if (inp.type === 'launch') applyLaunch(world, inp.side, inp.dx, inp.dy);
-    else applyUltimate(world, inp.side);
+    else if (inp.type === 'ultimate') applyUltimate(world, inp.side);
+    else { break; } // Tactical records are consumed at the between-step boundary.
     k++;
   }
   if (k > 0) q.splice(0, k);
+}
+
+/** Tactical decisions happen between steps at halftime. No world time passes while waiting. */
+export function needsTactical(world: World): boolean {
+  return world.ruleset === 'tactical' && world.phase === 'running' && world.step >= Math.floor(world.matchSteps / 2) && !world.tacticalResolved;
+}
+
+export function tacticalDefault(world: World, side: SideIndex): TacticalChoice {
+  if (!canUltimate(world, side)) return 'recharge';
+  return world.counts[side] < world.counts[side === 0 ? 1 : 0] ? 'shield' : 'speed';
+}
+
+export function applyTactical(world: World, side: SideIndex, choice: TacticalChoice): boolean {
+  if (!needsTactical(world) || world.tacticalChoices[side] !== null) return false;
+  world.tacticalChoices[side] = choice;
+  world.inputLog.push({ step: world.step, side, type: 'tactical', choice });
+  return true;
+}
+
+/** Resolve together after both choices are locked; effects never influence the other side's decision. */
+export function resolveTactical(world: World): void {
+  if (world.tacticalResolved || world.tacticalChoices.some((c) => c === null)) return;
+  world.tacticalResolved = true;
+  for (const side of [0, 1] as const) {
+    const ctx = world.contexts[side];
+    const choice = world.tacticalChoices[side];
+    if (choice === 'speed') ctx.surge(tuning.agency.tacticalSpeed, tuning.agency.tacticalSpeedSeconds);
+    else if (choice === 'shield') ctx.shield(tuning.agency.tacticalShieldSeconds);
+    else if (choice === 'recharge') ctx.grantUltimate();
+  }
 }

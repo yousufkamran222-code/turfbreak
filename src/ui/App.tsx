@@ -1,3 +1,4 @@
+import { ComparisonScreen } from './ComparisonScreen';
 import { useEffect, useState } from 'preact/hooks';
 import { coreById } from '../content/cores';
 import { tuning } from '../content/tuning';
@@ -23,7 +24,7 @@ function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
 
-type Screen = 'home' | 'run' | 'cores' | 'settings' | 'debug' | 'quick' | 'collection' | 'lab' | 'labmatch' | 'replay';
+type Screen = 'comparison' | 'home' | 'run' | 'cores' | 'settings' | 'debug' | 'quick' | 'collection' | 'lab' | 'labmatch' | 'replay';
 
 /** What `?replay=` held on load: a replay to play, or why it cannot be. */
 type Incoming = { data: ReplayData } | { error: string } | null;
@@ -75,6 +76,7 @@ export function App({ game }: Props) {
     <>
       <Screens game={game} />
       <UnlockToast game={game} />
+      {game.saveFailed.value && <div class="save-status" role="status">Progress could not be saved. Retrying when you return.</div>}
     </>
   );
 }
@@ -114,6 +116,8 @@ function Screens({ game }: Props) {
     setMuted(!muted);
   };
 
+  if (screen === 'comparison') return <ComparisonScreen game={game} onDone={home} />;
+
   if (screen === 'replay') {
     const cfg = replay ? replayConfig(replay) : null;
     if (!replay || !cfg) {
@@ -122,6 +126,7 @@ function Screens({ game }: Props) {
     }
     const session: SessionConfig = {
       seed: cfg.seed,
+      ruleset: cfg.ruleset ?? 'classic',
       cores: cfg.cores,
       mods: cfg.mods ?? [[], []],
       rival: null,
@@ -274,9 +279,11 @@ function Screens({ game }: Props) {
     );
   }
 
-  if (firstLaunch) return <FirstScreen game={game} onRun={() => setScreen('run')} onSettings={() => setScreen('settings')} />;
+  if (firstLaunch) return <div class="playtest-home">{(import.meta.env.DEV || import.meta.env.VITE_AGENCY_PLAYTEST === 'true') && <button type="button" class="secondary" id="agency-playtest" onClick={() => setScreen('comparison')}>Agency playtest</button>}<FirstScreen game={game} onRun={() => setScreen('run')} onSettings={() => setScreen('settings')} /></div>;
 
   return (
+    <div class="playtest-home">
+    {(import.meta.env.DEV || import.meta.env.VITE_AGENCY_PLAYTEST === 'true') && <button type="button" class="secondary" id="agency-playtest" onClick={() => setScreen('comparison')}>Agency playtest</button>}
     <HomeScreen
       game={game}
       onRun={() => setScreen('run')}
@@ -292,5 +299,6 @@ function Screens({ game }: Props) {
       }}
       onDailyResume={() => setScreen('run')}
     />
+    </div>
   );
 }

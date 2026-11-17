@@ -32,55 +32,40 @@ export class Hasher {
   }
 }
 
-export function hashWorld(world: World): number {
+/** Hash data recursively in canonical key order; never hash executable code. */
+function data(h: Hasher, value: unknown): void {
+  if (typeof value === 'number') { h.byte(1); h.f64(value); }
+  else if (typeof value === 'string') { h.byte(2); h.u32(value.length); for (let i = 0; i < value.length; i++) h.u32(value.charCodeAt(i)); }
+  else if (typeof value === 'boolean') { h.byte(3); h.byte(value ? 1 : 0); }
+  else if (value === null || value === undefined) h.byte(0);
+  else if (Array.isArray(value) || ArrayBuffer.isView(value)) {
+    h.byte(4);
+    const values = value as ArrayLike<unknown>;
+    h.u32(values.length);
+    for (let i = 0; i < values.length; i++) data(h, values[i]);
+  } else if (typeof value === 'object') {
+    h.byte(5);
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).filter((k) => typeof record[k] !== 'function').sort();
+    h.u32(keys.length);
+    for (const k of keys) { data(h, k); data(h, record[k]); }
+  }
+}
+
+function state(world: World, controls: boolean): number {
   const h = new Hasher();
-  h.u32(world.step);
-  h.bytes(world.owner);
-  h.bytes(world.cellShield);
-  for (let i = 0; i < world.cellLockUntil.length; i++) h.u32(world.cellLockUntil[i]!);
-  h.u32(world.timers.length);
-  h.u32(world.runners.length);
-  for (const r of world.runners) {
-    h.f64(r.x);
-    h.f64(r.y);
-    h.f64(r.dx);
-    h.f64(r.dy);
-    h.u32(r.cell);
-    h.f64(r.lastX);
-    h.f64(r.lastY);
-    h.f64(r.bx);
-    h.f64(r.by);
-    h.f64(r.spinLeft);
-    h.f64(r.spinReach);
-    h.byte(r.swinging ? 1 : 0);
-  }
-  for (const s of world.sides) {
-    h.u32(s.hits);
-    h.u32(s.captures);
-    h.f64(s.stacks);
-    h.u32(s.overflow);
-    h.u32(s.ultimates);
-    h.u32(s.ultimatesUsed);
-    h.u32(s.slowSteps);
-    h.u32(s.surgeSteps);
-    h.u32(s.shieldSteps);
-    h.u32(s.pickups);
-    for (const k of ['speed', 'bodyRadius', 'captureRadius', 'beamLength'] as const) {
-      h.f64(s.stats[k].add);
-      h.f64(s.stats[k].mul);
-    }
-  }
-  h.u32(world.pickups.length);
-  for (const p of world.pickups) {
-    h.u32(p.id);
-    h.u32(p.def);
-    h.f64(p.x);
-    h.f64(p.y);
-  }
-  const rs = world.rng.getState();
-  h.u32(rs.a);
-  h.u32(rs.b);
-  h.u32(rs.c);
-  h.u32(rs.d);
+  const { arena, contexts: _contexts, hitScratch: _scratch, events: _events, recordEvents: _record, rng, aiRngs, controllers, ...rest } = world;
+  void _contexts; void _scratch; void _events; void _record;
+  // Hooks/contexts are executable references. Content identity is explicit and versioned.
+  data(h, { ...rest, arena: { size: arena.size, centroids: arena.centroids, neighbors: arena.neighbors },
+    sides: world.sides.map(({ core, mods, aiUltimateStep, ...side }) => ({ ...side, ...(controls ? { aiUltimateStep } : {}), core: core.id, mods: mods.map((p) => [p.mod.id, p.level]) })),
+    pickupDefs: world.pickupDefs.map((p) => p.id), rng: rng.getState(),
+    ...(controls ? { controllers, aiRngs: aiRngs.map((r) => r.getState()) } : {}),
+  });
   return h.digest();
 }
+
+/** Complete simulation state, including controller state and pending effects/inputs. */
+export function hashWorld(world: World): number { return state(world, true); }
+/** Replay equivalence excludes controllers and their private RNG streams, which recordings replace. */
+export function hashReplayState(world: World): number { return state(world, false); }

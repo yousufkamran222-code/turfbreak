@@ -9,13 +9,14 @@ const bare = (twist = {}) => createWorld({ seed: 4, cores: [blank, blank], picku
 
 describe('ability API', () => {
   it('after() fires once at the right time, in the order timers were set', () => {
-    const w = bare();
-    const order: string[] = [];
-    w.contexts[0].after(1, () => order.push('a'));
-    w.contexts[1].after(1, () => order.push('b'));
-    w.contexts[0].after(0.5, () => order.push('early'));
+    const order: number[] = [];
+    const core = { ...blank, hooks: { onScheduled: (_ctx: unknown, effect: { kind: string; cell?: number }) => { order.push(effect.cell!); } } };
+    const w = createWorld({ seed: 4, cores: [core, core], pickups: [] });
+    w.contexts[0].after(1, { kind: 'core', action: 'spread', cell: 1 });
+    w.contexts[1].after(1, { kind: 'core', action: 'spread', cell: 2 });
+    w.contexts[0].after(0.5, { kind: 'core', action: 'spread', cell: 0 });
     for (let i = 0; i < SPS; i++) stepWorld(w);
-    expect(order).toEqual(['early', 'a', 'b']);
+    expect(order).toEqual([0, 1, 2]);
     for (let i = 0; i < SPS; i++) stepWorld(w);
     expect(order.length).toBe(3);
   });

@@ -42,6 +42,11 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // Playtest APK coexists with the normal app and cannot replace its preferences.
+            if (project.hasProperty('agencyPlaytest')) {
+                applicationIdSuffix ".playtest"
+                versionNameSuffix "-playtest"
+            }
         }
         release {
             if (System.getenv('ANDROID_KEYSTORE_PATH')) {

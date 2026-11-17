@@ -26,6 +26,13 @@ interface CrazySdk {
   data: { getItem(key: string): string | null; setItem(key: string, value: string): void };
 }
 
+function bounded<T>(work: Promise<T>, milliseconds: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('SDK timeout')), milliseconds);
+    work.then(resolve, reject).finally(() => clearTimeout(timer)).catch(() => {});
+  });
+}
+
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
@@ -44,6 +51,9 @@ export function createCrazyGamesPlatform(): Platform {
   let sdk: CrazySdk | null = null;
   let adblock = false;
   let adPlaying = false;
+  let adsDisabled = false;
+  let requestId = 0;
+  let visible = !document.hidden;
 
   /** Run an SDK call; a throw never reaches the game. */
   const safe = (fn: (s: CrazySdk) => void): void => {
@@ -57,22 +67,34 @@ export function createCrazyGamesPlatform(): Platform {
 
   const playAd = (kind: 'midgame' | 'rewarded'): Promise<RewardedResult> =>
     new Promise((resolve) => {
-      if (!sdk || adPlaying) {
+      if (!sdk || adPlaying || adsDisabled || adblock) {
         resolve('unavailable');
         return;
       }
+      const id = ++requestId;
       adPlaying = true;
       let started = false;
+      let settled = false;
       const done = (result: RewardedResult): void => {
-        if (!adPlaying) return;
+        if (settled || id !== requestId) return;
+        settled = true;
+        clearTimeout(timer);
         adPlaying = false;
-        if (started) resume.emit();
+        if (started && visible) resume.emit();
         resolve(result);
       };
+      const timeout = (): void => {
+        adsDisabled = true;
+        done(started ? 'dismissed' : 'unavailable');
+      };
+      let timer = setTimeout(timeout, 15_000);
       try {
         sdk.ad.requestAd(kind, {
           adStarted: () => {
+            if (settled || id !== requestId || started) return;
             started = true;
+            clearTimeout(timer);
+            timer = setTimeout(timeout, 180_000);
             pause.emit();
           },
           adFinished: () => done('rewarded'),
@@ -90,19 +112,22 @@ export function createCrazyGamesPlatform(): Platform {
     canShareFiles: false,
     async init() {
       await web.init();
-      web.onPause(() => pause.emit());
+      web.onPause(() => { visible = false; pause.emit(); });
       web.onResume(() => {
+        visible = true;
         if (!adPlaying) resume.emit();
       });
       try {
-        await loadScript(SDK_URL);
-        const s = (window as unknown as { CrazyGames?: { SDK?: CrazySdk } }).CrazyGames?.SDK;
-        if (!s) return;
-        await s.init();
-        if (s.environment === 'disabled') return;
-        sdk = s;
+        const ready = await bounded((async () => {
+          await loadScript(SDK_URL);
+          const s = (window as unknown as { CrazyGames?: { SDK?: CrazySdk } }).CrazyGames?.SDK;
+          if (!s) return null;
+          await s.init();
+          return s.environment === 'disabled' ? null : s;
+        })(), 10_000);
+        sdk = ready;
         safe((x) => x.game.loadingStart());
-        adblock = await s.ad.hasAdblock().catch(() => false);
+        if (ready) adblock = await bounded(ready.ad.hasAdblock(), 3_000).catch(() => true);
       } catch {
         sdk = null;
       }
@@ -119,7 +144,7 @@ export function createCrazyGamesPlatform(): Platform {
     happyMoment() {
       safe((s) => s.game.happytime());
     },
-    canShowRewarded: () => sdk !== null && !adblock && !adPlaying,
+    canShowRewarded: () => sdk !== null && !adblock && !adPlaying && !adsDisabled,
     showRewarded: () => playAd('rewarded'),
     async showInterstitial() {
       if (!sdk || adblock) return;

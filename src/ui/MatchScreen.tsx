@@ -156,7 +156,7 @@ export function MatchScreen(props: Props) {
   const ready = hud?.ultimateReady.value ?? false;
   const wait = hud?.ultimateWait.value ?? 0;
   const ult = cores[0].ultimate;
-  const ultReady = ready && stage === 'playing';
+  const ultReady = ready && !paused && !hud?.tactical.value && stage === 'playing';
   const ultSub = ultReady ? ult.description : stage === 'aiming' ? 'Ready after launch' : wait > 0 ? `Ready in ${wait}s` : 'Used';
   const ultName = ultReady ? `TAP: ${ult.name.toUpperCase()}` : ult.name.toUpperCase();
   const tags = props.neutral || props.replay ? (['SIDE A', 'SIDE B'] as const) : (['YOU', 'RIVAL'] as const);
@@ -250,6 +250,17 @@ export function MatchScreen(props: Props) {
           </div>
         )}
       </div>
+      {hud?.tactical.value && !paused && (
+        <section class="tactical-panel" aria-label="Halftime tactical choice">
+          <strong>HALFTIME · CHOOSE A BOOST</strong>
+          <p>The match is paused. Inspect the arena, then choose.</p>
+          <div class="row">
+            <button type="button" onClick={() => session?.chooseTactical('speed')}>Speed +20% · 6s</button>
+            <button type="button" onClick={() => session?.chooseTactical('shield')}>Shield · 3s</button>
+            <button type="button" onClick={() => session?.chooseTactical('recharge')}>Ultimate ready</button>
+          </div>
+        </section>
+      )}
       {!passive && (
         <div class="aim-row" aria-live="polite">
           {stage === 'aiming' && (
@@ -272,6 +283,7 @@ export function MatchScreen(props: Props) {
         >
           <span class="ult-name">{ultName}</span>
           <span class="ult-desc">{ultSub}</span>
+          {config.ruleset === 'recharge' && <progress aria-label="Ultimate charge" max={1} value={hud?.rechargeProgress.value ?? 1} />}
         </button>
       )}
       <footer class="match-footer">

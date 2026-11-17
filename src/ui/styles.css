@@ -740,3 +740,19 @@ button.daily, .daily.done {
   .sp-log li.side-1 .g { color: var(--side-b); }
   .side-panel h3 { margin-top: 8px; }
 }
+
+.save-status { position: fixed; bottom: 0; left: 0; right: 0; padding: .6rem; text-align: center; background: #513815; color: white; z-index: 100; font-size: .85rem; }
+
+.tactical-panel { padding: .6rem; background: #202033; border: 1px solid #8787a8; border-radius: .6rem; text-align: center; }
+.tactical-panel p { margin: .3rem 0; font-size: .8rem; }
+.tactical-panel .row { flex-wrap: wrap; justify-content: center; }
+.tactical-panel button { padding: .5rem; font-size: .8rem; }
+.ultimate progress { width: 85%; height: .3rem; }
+
+.comparison-label { text-align: center; font-size: .75rem; padding: .2rem; color: #dadaff; }
+
+.comparison-run, .playtest-home { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.comparison-run > .match-wrap, .comparison-run > .screen, .playtest-home > .screen { flex: 1; min-height: 0; height: auto; }
+.comparison-label, #agency-playtest { flex-shrink: 0; }
+
+.comparison-label button { min-height: 28px; font-size: .7rem; margin-left: .4rem; }

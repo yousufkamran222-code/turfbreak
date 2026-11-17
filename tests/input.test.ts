@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tuning } from '../src/content/tuning';
-import { hashWorld } from '../src/sim/hash';
+import { hashReplayState } from '../src/sim/hash';
 import { applyLaunch, queueInput, type ControllerSpec } from '../src/sim/input';
 import { stepWorld } from '../src/sim/step';
 import { createWorld, type MatchConfig } from '../src/sim/world';
@@ -64,7 +64,7 @@ describe('replays', () => {
     // Replace side 0's controller with its recorded inputs; side 1 keeps its own controller and stream.
     const replay = createWorld({ ...cfg, controllers: [null, rival], inputs: mine });
     while (replay.phase !== 'ended') stepWorld(replay);
-    expect(hashWorld(replay)).toBe(hashWorld(live));
+    expect(hashReplayState(replay)).toBe(hashReplayState(live));
   });
 
   it('give the same result for inputs queued live and the same inputs pre-recorded', () => {
@@ -75,7 +75,7 @@ describe('replays', () => {
     while (a.phase !== 'ended') stepWorld(a);
     const b = createWorld({ seed: 3, cores: [ricochet, splitter], inputs: a.inputLog });
     while (b.phase !== 'ended') stepWorld(b);
-    expect(hashWorld(b)).toBe(hashWorld(a));
+    expect(hashReplayState(b)).toBe(hashReplayState(a));
   });
 });
 

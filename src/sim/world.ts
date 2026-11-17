@@ -1,5 +1,6 @@
+import { finite, integer, validController, validInputs } from './validation';
 import { tuning } from '../content/tuning';
-import type { AbilityContext, CoreDef, HitInfo, ModPick, SpawnOptions } from './abilities';
+import type { AbilityContext, CoreDef, ScheduledEffect, HitInfo, ModPick, SpawnOptions } from './abilities';
 import { generateArena, findCell, type Arena } from './arena';
 import type { EndReason, SimEvent } from './events';
 import { primaryOf, runUltimate, type ControllerSpec, type InputRecord } from './input';
@@ -7,6 +8,9 @@ import { capture, hit } from './step';
 import { pickups as allPickups, type PickupDef } from '../content/pickups';
 import { Rng, Stream } from './rng';
 import { rotateSmall } from './vec';
+
+export type Ruleset = 'classic' | 'recharge' | 'tactical';
+export type TacticalChoice = 'speed' | 'shield' | 'recharge';
 
 export type SideIndex = 0 | 1;
 export const NEUTRAL = 255;
@@ -64,6 +68,7 @@ export interface SideState {
   launched: boolean;
   ultimates: number;
   ultimatesUsed: number;
+  rechargeAt: number;
   /** Combined speed factor from underdog boost and Surge, recomputed each step. */
   speedFactor: number;
   /** Pickup grab distance multiplier (Magnet). */
@@ -91,6 +96,7 @@ export interface Pickup {
 
 export interface MatchConfig {
   seed: number;
+  ruleset?: Ruleset;
   cores: readonly [CoreDef, CoreDef];
   /** A built-in controller per side, or null for none (a human, a replay or no input). */
   controllers?: readonly [ControllerSpec | null, ControllerSpec | null];
@@ -123,12 +129,15 @@ export interface Timer {
   side: SideIndex;
   /** Mod slot whose hook set the timer, or -1 for the Core. */
   mod: number;
-  fn: (ctx: AbilityContext) => void;
+  effect: ScheduledEffect;
 }
 
 export type Phase = 'running' | 'suddenDeath' | 'ended';
 
 export interface World {
+  readonly ruleset: Ruleset;
+  tacticalResolved: boolean;
+  readonly tacticalChoices: [TacticalChoice | null, TacticalChoice | null];
   readonly arena: Arena;
   readonly owner: Uint8Array;
   readonly counts: [number, number];
@@ -144,7 +153,7 @@ export interface World {
   readonly pendingInputs: InputRecord[];
   /** Every input applied, in order: everything a replay needs besides seed and builds. */
   readonly inputLog: InputRecord[];
-  /** Pending `ctx.after` callbacks, in firing order. */
+  /** Pending `ctx.after` effect records, in firing order. */
   readonly timers: Timer[];
   /** Shield points per cell, the step each last absorbed a capture, and the step until which each is locked. */
   readonly cellShield: Uint8Array;
@@ -256,9 +265,9 @@ function makeContext(world: () => World, side: SideIndex): AbilityContext {
     },
     enemy: side === 0 ? 1 : 0,
     primary: () => primaryOf(world(), side),
-    after(seconds, fn) {
+    after(seconds, effect) {
       const w = world();
-      const t: Timer = { step: w.step + Math.max(1, Math.round(seconds * tuning.sim.stepsPerSecond)), side, mod: w.currentMod, fn };
+      const t: Timer = { step: w.step + Math.max(1, Math.round(seconds * tuning.sim.stepsPerSecond)), side, mod: w.currentMod, effect };
       // Insert after every timer due at or before the same step, so equal-step timers fire in the order they were set.
       let i = w.timers.length;
       while (i > 0 && w.timers[i - 1]!.step > t.step) i--;
@@ -368,7 +377,7 @@ function makeContext(world: () => World, side: SideIndex): AbilityContext {
       r.spinReach = maxReach;
     },
     echoUltimate(seconds) {
-      this.after(seconds, () => runUltimate(world(), side, true));
+      this.after(seconds, { kind: 'echo-ultimate' });
     },
     spawnRunner(from, opts) {
       const w = world();
@@ -442,7 +451,30 @@ export function transferCells(world: World, from: SideIndex, to: SideIndex, n: n
   }
 }
 
+/** Execute explicit delayed effects; their complete payload participates in hashing. */
+export function runScheduled(world: World, timer: Timer): void {
+  const ctx = world.contexts[timer.side];
+  const effect = timer.effect;
+  if (effect.kind === 'echo-ultimate') runUltimate(world, timer.side, true);
+  else if (effect.kind === 'grant-ultimate') { ctx.grantUltimate(); ctx.triggered(); }
+  else if (effect.kind === 'restore-radius') {
+    ctx.mulStat('captureRadius', effect.factor);
+    world.sides[timer.side].stacks = Math.round(statValue(world.sides[timer.side], 'captureRadius'));
+  } else world.sides[timer.side].core.hooks.onScheduled?.(ctx, effect);
+}
+
 export function createWorld(cfg: MatchConfig): World {
+  if (cfg.ruleset !== undefined && !['classic', 'recharge', 'tactical'].includes(cfg.ruleset)) throw new Error('Invalid ruleset');
+  if (cfg.mods?.some((build) => build.length > 6 || build.some((p, i) => !integer(p.level, 1, 3) || build.slice(0, i).some((q) => q.mod.id === p.mod.id)))) throw new Error('Invalid build');
+  const t = cfg.twist;
+  if (!integer(cfg.seed, 0, 0xffffffff) ||
+      (t?.durationSeconds !== undefined && !finite(t.durationSeconds, 1 / tuning.sim.stepsPerSecond, 120)) ||
+      (t?.pickupEverySeconds !== undefined && !finite(t.pickupEverySeconds, 1 / tuning.sim.stepsPerSecond, 60)) ||
+      (t?.extraPrimaries !== undefined && (t.extraPrimaries.length !== 2 || !t.extraPrimaries.every((n) => integer(n, 0, tuning.runner.maxPerSide - 1)))) ||
+      (t?.startShare !== undefined && !finite(t.startShare, 0.1, 0.9)) ||
+      (t?.startShields !== undefined && (t.startShields.length !== 2 || !t.startShields.every((n) => integer(n, 0, 255)))) ||
+      cfg.controllers?.some((c) => c !== null && !validController(c)) ||
+      (cfg.inputs && !validInputs(cfg.inputs, t?.durationSeconds ?? tuning.match.durationSeconds, cfg.ruleset))) throw new Error('Invalid match configuration');
   const arena = generateArena(tuning.arena, new Rng(cfg.seed, Stream.arena));
   const rng = new Rng(cfg.seed, Stream.sim);
   const n = arena.cellCount;
@@ -474,6 +506,7 @@ export function createWorld(cfg: MatchConfig): World {
     launched: false,
     ultimates: 1,
     ultimatesUsed: 0,
+    rechargeAt: -1,
     speedFactor: 1,
     pickupReachMul: 1,
     aiUltimateStep: -1,
@@ -486,6 +519,9 @@ export function createWorld(cfg: MatchConfig): World {
   });
 
   const world: World = {
+    ruleset: cfg.ruleset ?? 'classic',
+    tacticalChoices: [null, null],
+    tacticalResolved: false,
     arena,
     owner,
     counts: [half, n - half],

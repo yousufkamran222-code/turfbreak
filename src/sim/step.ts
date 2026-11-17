@@ -1,11 +1,11 @@
 import { tuning } from '../content/tuning';
 import { runControllers } from './ai';
 import { findCell } from './arena';
-import { applyPendingInputs } from './input';
+import { applyPendingInputs, applyTactical, needsTactical, resolveTactical, tacticalDefault } from './input';
 import { updatePickups } from './pickups';
 import type { CaptureCause, EndReason } from './events';
 import { rotateSmall } from './vec';
-import { emit, statValue, type Runner, type SideIndex, type World } from './world';
+import { emit, runScheduled, statValue, type Runner, type SideIndex, type World } from './world';
 
 const shieldAbsorbSteps = Math.round(tuning.shield.absorbSeconds * tuning.sim.stepsPerSecond);
 
@@ -324,16 +324,35 @@ function updateLead(world: World): void {
 /** Advance the world by one fixed step of 1/60 s. */
 export function stepWorld(world: World): void {
   if (world.phase === 'ended') return;
+  if (needsTactical(world)) {
+    // Only consume decisions at this boundary, never a queued next-step ultimate.
+    for (let i = 0; i < world.pendingInputs.length;) {
+      const input = world.pendingInputs[i]!;
+      if (input.type === 'tactical' && input.step <= world.step) {
+        applyTactical(world, input.side, input.choice);
+        world.pendingInputs.splice(i, 1);
+      } else i++;
+    }
+    for (const side of [0, 1] as const) if (world.controllers[side]) applyTactical(world, side, tacticalDefault(world, side));
+    if (world.tacticalChoices.some((c) => c === null)) return;
+    resolveTactical(world);
+  }
   // Events emitted while the world was created (match-start hooks) ride along with step 1's.
   if (world.step > 0) world.events.length = 0;
   world.step++;
 
+  for (const side of world.sides) {
+    if (world.ruleset === 'recharge' && side.ultimates === 0 && side.rechargeAt >= 0 && world.step >= side.rechargeAt) {
+      side.ultimates = 1;
+      side.rechargeAt = -1;
+    }
+  }
   applyPendingInputs(world);
   runControllers(world);
   while (world.timers.length > 0 && world.timers[0]!.step <= world.step) {
     const t = world.timers.shift()!;
     world.currentMod = t.mod;
-    t.fn(world.contexts[t.side]);
+    runScheduled(world, t);
     world.currentMod = -1;
   }
   updateSpeedFactors(world);
