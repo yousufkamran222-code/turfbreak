@@ -89,3 +89,37 @@ export function coreName(core: CoreDef): string {
 export function findCore(id: string): CoreDef | undefined {
   return cores.find((c) => c.id === id);
 }
+
+/** A build as a list of "glyph name level" buttons. Tapping one reports it, for the popover. */
+export function ModList({
+  build,
+  active,
+  onTap,
+}: {
+  build: readonly BuildEntry[];
+  active?: string | null;
+  onTap(id: string): void;
+}) {
+  const picks: ModPick[] = buildPicks(build);
+  if (picks.length === 0) return <div class="mod-list none">No Mods</div>;
+  return (
+    <div class="mod-list">
+      {picks.map((p) => (
+        <button
+          key={p.mod.id}
+          type="button"
+          class={`mod-line ${p.mod.rarity} ${active === p.mod.id ? 'on' : ''}`}
+          data-mod={p.mod.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTap(p.mod.id);
+          }}
+        >
+          <span class="g">{p.mod.glyph}</span>
+          <span class="n">{p.mod.name}</span>
+          <span class="l">{p.level}</span>
+        </button>
+      ))}
+    </div>
+  );
+}

@@ -55,13 +55,13 @@ export const MAX_ASCENSION = 8;
 
 export const ascensionTiers: readonly AscensionTier[] = [
   { tier: 1, description: 'Rivals carry one more Mod.', change: { rivalPicks: 1 } },
-  { tier: 2, description: 'Rivals aim and use their ultimate from round 1.', change: { rivalsAlwaysControlled: true } },
-  { tier: 3, description: 'Start with no rerolls.', change: { rerolls: -1 } },
-  { tier: 4, description: 'Bosses on rounds 4, 7 and 10.', change: { bossRounds: [4, 7, 10] } },
+  { tier: 2, description: 'Start with no rerolls.', change: { rerolls: -1 } },
+  { tier: 3, description: 'Bosses on rounds 4, 7 and 10.', change: { bossRounds: [4, 7, 10] } },
+  { tier: 4, description: 'Rivals aim and use their ultimate from round 1.', change: { rivalsAlwaysControlled: true } },
   { tier: 5, description: "Rivals' Mods are one level higher.", change: { rivalLevels: 1 } },
-  { tier: 6, description: 'Start with 2 hearts.', change: { hearts: -1 } },
-  { tier: 7, description: 'Rivals aim sharper and save their ultimate for better moments.', change: { rivalController: { aimError: 0.05, patience: 1.25 } } },
-  { tier: 8, description: 'Rivals carry another Mod.', change: { rivalPicks: 1 } },
+  { tier: 6, description: 'Rivals aim sharper and save their ultimate for better moments.', change: { rivalController: { aimError: 0.05, patience: 1.25 } } },
+  { tier: 7, description: 'Drafts offer one fewer Mod.', change: { offerSize: -1 } },
+  { tier: 8, description: 'Start with 2 hearts.', change: { hearts: -1 } },
 ];
 
 /** The rules for an Ascension tier (clamped to 0..8). */

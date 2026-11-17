@@ -192,13 +192,13 @@ You should see four secrets in the list. GitHub does not show the values again. 
 
 The **Release** workflow runs when a tag starts with `v`. It also checks that the tag matches the version in `package.json`.
 
-- The tag must be `v` plus the version. The current version is `0.3.0`, so the tag is `v0.3.0`.
+- The tag must be `v` plus the version. For example, version `0.5.0` in `package.json` means the tag `v0.5.0`.
 - To check the version, look at the top of `package.json` in the repo, or the version shown on the repo's main page.
 - If you change the version, change `package.json` first, merge it to `main`, and then tag.
 
 **Do not create the release yourself.** The workflow creates the GitHub Release. If you create one by hand with the same tag, the workflow fails with "release already exists".
 
-**Create the tag.** Ask Claude in a session: "Tag `main` as `v0.3.0` and push the tag." Claude will create and push only the tag. The version number is the one from `package.json`.
+**Create the tag.** Ask Claude in a session: "Tag `main` as `v0.5.0` and push the tag." Claude will create and push only the tag. The version number is the one from `package.json`.
 
 Once the tag is pushed:
 
@@ -225,12 +225,12 @@ Use a new version number for each Play upload where you can. Play refuses an upl
 When the Release run is green:
 
 1. Open https://github.com/yousufkamran222-code/turfbreak/releases
-2. Click the release named **Turfbreak v0.3.0** (or your version).
-3. Under **Assets**, download **`turfbreak-v0.3.0.aab`**.
+2. Click the release named **Turfbreak v0.5.0** (or your version).
+3. Under **Assets**, download **`turfbreak-v0.5.0.aab`**.
 
 Do not upload the `.apk` file to Play. The `.apk` is for installing directly on a phone. Play needs the `.aab`.
 
-The same release also holds `turfbreak-crazygames-v0.3.0.zip` for CrazyGames. See `crazygames-guide.md`.
+The same release also holds `turfbreak-crazygames-v0.5.0.zip` for CrazyGames. See `crazygames-guide.md`.
 
 ## 8. Create the closed test
 
@@ -243,10 +243,10 @@ Google Play App Signing is the default for new apps (unverified in this session)
 1. In the left menu, go to **Testing > Closed testing**.
 2. Click **Create track**, or open the existing closed track. Name it `Closed test` if asked.
 3. Click **Create new release**.
-4. Click **Upload** and choose `turfbreak-v0.3.0.aab`.
+4. Click **Upload** and choose `turfbreak-v0.5.0.aab`.
 5. Wait for the upload to finish. Play reads the file and shows the version code and name.
-6. Under **Release name**, type a name such as `0.3.0`.
-7. Under **Release notes**, type a short summary in plain English, for example: "Closed test of the Gauntlet. Please play it on your phone once a day and tell us what felt slow or confusing."
+6. Under **Release name**, type the version from `package.json`, for example `0.5.0`.
+7. Under **Release notes**, type a short summary in plain English, for example: "Closed test. Please play a run on your phone once a day and tell us what felt slow, confusing or unfair."
 8. Click **Save**, then **Review release**, then **Start rollout to closed testing**.
 
 Google reviews the release before it reaches testers. This can take a few hours to a few days (unverified).

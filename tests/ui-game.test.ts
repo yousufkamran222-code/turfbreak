@@ -5,6 +5,7 @@ import type { Platform } from '../src/platform';
 import { fx } from '../src/render/fx';
 import { matchConfig, type RunState } from '../src/run/run';
 import { Game } from '../src/ui/game';
+import { clock } from '../src/ui/Hud';
 import { bestMoment } from '../src/ui/moment';
 
 function fakePlatform(): Platform & { store: Map<string, string>; buzz: string[] } {
@@ -55,6 +56,12 @@ function winAll(game: Game, margin: number): void {
   }
 }
 
+describe('clock', () => {
+  it('formats seconds as m:ss', () => {
+    expect([40, 16, 9, 0, 75].map(clock)).toEqual(['0:40', '0:16', '0:09', '0:00', '1:15']);
+  });
+});
+
 describe('Game', () => {
   it('saves the run after every change and parses it back', () => {
     const p = fakePlatform();
@@ -90,6 +97,18 @@ describe('Game', () => {
     expect(game.save.value.stats.runsWon).toBe(1);
     expect(game.save.value.run?.outcome).toBe('lost');
     expect(game.save.value.stats.matchesLost).toBe(3);
+  });
+
+  it('the draft hint is remembered once seen, and survives a Core change and a reload', async () => {
+    const p = fakePlatform();
+    const game = new Game(p, synth, defaultSave());
+    expect(game.prefs.value.draftHintSeen).toBeFalsy();
+    game.markDraftHintSeen();
+    game.setPrefs({ coreId: 'splitter', ascension: 0 });
+    expect(game.prefs.value.draftHintSeen).toBe(true);
+    const again = new Game(p, synth, defaultSave());
+    await again.loadPrefs();
+    expect(again.prefs.value.draftHintSeen).toBe(true);
   });
 
   it('clamps the chosen Ascension to what the Core has earned', () => {

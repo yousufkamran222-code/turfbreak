@@ -2,6 +2,74 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Ad placements and CI smoke
+
+- **Rules live in `src/ui/ads.ts`** (pure, unit-tested with a fake platform in `tests/ads.test.ts`); `Game` runs the flows.
+- **"First run"** means `stats.runsStarted <= 1`. The brief's "runsStarted > 1 or runsCompleted >= 1" would also match the summary of the first run itself (its loss is counted as completed), so the revive would show there. Quitting run 1 and starting run 2 lifts the restriction.
+- **Rewarded reroll** ("▶ Free reroll (ad)"): a secondary button under Reroll/Skip, shown when the platform has rewarded ads, not the first run and `canAdReroll`. Only 'rewarded' applies `adReroll`; dismissed or unavailable change nothing and show nothing.
+- **Revive** ("▶ Revive: +1 heart (ad)"): primary button above Play again on a lost summary (Play again turns secondary). On 'rewarded' it applies `revive` and the player lands in the draft.
+- **Stats on revive:** entering the summary had counted the run as completed (`runsCompleted`). Revive takes that one count back (not in Endless, which never counts), so the run counts once when it really ends. Match losses stay counted: those matches were lost.
+- **Between-run interstitial** on leaving the summary (Play again, Home or back), awaited, only when `runsCompleted >= 2` (never after the first completed run), when the same visit did not offer a revive, and once per run (keyed on the run seed). A revived run that is lost again gets it, since that visit has no revive offer. An ad error never blocks leaving.
+- **Pause during ads:** the pause overlay listens to `onPause` only while a match is mounted, and ads only play outside matches, so an ad's pause/resume is a no-op for the UI (verified in `MatchScreen`).
+- **Web and Android** report `canShowRewarded() === false`: no rewarded button appears there (tested). The interstitial calls `showInterstitial()`, which resolves at once on web.
+- **Dev-only preview:** `npm run dev` with `?fakeads` fakes rewarded ads (`withDevFakeAds`, gated on `import.meta.env.DEV`, absent from builds).
+- **CI UI smoke:** `node tools/ui-smoke.mjs --fast` plays one match (first launch, draft, VS card, aim, 2x speed with big clock slices), checks the next draft, Settings and Collection, and fails on any console error. About 10 s locally, so it runs as a normal CI step after the size check, with Chromium installed by `npx playwright install chromium --with-deps` and screenshots uploaded as `ui-smoke-screenshots`. `playwright` is now a pinned devDependency (1.65.1). The full smoke stays manual.
+
+## 2026-11-17: Playtest round 1 fixes
+
+- **Stuck 2x match: not reproduced.** Playwright runs (2x toggled during aiming, 3 s into the match, 40 rapid toggles, and during the ultimate slow-motion) all counted the timer down and ended the match. One latent bug was real and fixed: when a hit-stop began part-way through a frame at 2x or 4x, the frame's remaining steps were consumed without running, and the stepper was reset during hit-stop, so sim time was lost. `FixedStepper.advance` now lets the callback return `false` to stop the frame without consuming the step, and the session no longer resets the stepper during hit-stop. Unit tests added. Most likely the original stall was the driver (a pulsing `transform` also made the ultimate button "unstable" for Playwright clicks, so the ready pulse now uses only shadow and brightness).
+- **VS card shows Mods by name.** Each Mod is a 44 px row: glyph, short name, level, two columns when there is room, for both sides. Tapping one opens a popover with its full text on that side's card; the 2 s auto-start waits while it is open, and a tap anywhere closes it (instead of starting the match).
+- **Draft hint once.** `draftHintSeen` lives in the existing `turfbreak.ui` prefs key and is kept through Core changes. The skip button reads "Skip (+1 reroll)".
+- **Seed hidden in matches** except the Debug quick match and the Versus Lab (`showSeed`).
+- **Ultimate button states:** ready (filled in the player's colour, pulsing, "TAP: NAME" with description), aiming (dashed outline in the player's colour, "Ready after launch", full-contrast text), used ("Used", or "Ready in Ns" when the player has Quick Hands; the count is display-only, mirrored from the Mod's numbers; pickup recharges are not predicted).
+- **Aim hint** is a one-line row between the arena and the ultimate button, with a draining ring for the auto-launch instead of a digit. The row keeps its height after launch so the arena does not resize.
+- **Top HUD:** names on one line at 12 px; timer is a clock with a "LEFT" label ("AIM", "SUDDEN DEATH" and "FINAL" stay words).
+- **Magnet glyph** is now "∩" (a horseshoe, flat like the others), replacing the colour emoji.
+- **Desktop layout** (6.4) built as described in the brief: panels appear at 900 px and up in landscape; the in-header Mod chips are hidden there as the left panel lists them. The trigger log comes from the session's `CoreTriggered` and `ModTriggered` events (`hud.log`, last 8, Core triggers use a "◈" icon).
+- **6.6 rewritten** to the real first-launch flow (Core, first draft with hint, VS card, aim, match; about 3 s and 3 taps).
+
+## 2026-11-17: Stage D, CrazyGames adapter and ad rules
+
+- **`src/platform/crazygames.ts`** wraps the web adapter. Facts are from the v3 docs ([intro](https://docs.crazygames.com/sdk/intro/), [video ads](https://docs.crazygames.com/sdk/video-ads/)):
+  - It loads `https://sdk.crazygames.com/crazygames-sdk-v3.js` at run time and awaits `SDK.init()`.
+  - It does nothing when the environment is `disabled`. Outside CrazyGames every SDK call would throw, so the game then behaves exactly as the web build.
+  - It maps the loading and gameplay events, happytime and the data module (with a localStorage fallback).
+  - Rewarded and midgame ads go through `ad.requestAd`, which pauses and mutes the game via the existing pause/resume hooks and recovers on `adError`.
+  - `hasAdblock()` hides rewarded buttons.
+- **Bundles:** the SDK loader is a separate 1.5 KB chunk in the CrazyGames build only; the web build contains no SDK code.
+- **Run rules for rewarded placements (brief 7.2):**
+  - `revive` restores one heart, once per run, at zero hearts. A lost final round is played again.
+  - `adReroll` gives one extra reroll per draft.
+  - Neither is available in the Daily Clash, whose scored attempt must stay fair.
+- **Ad timing:** no ads in a player's first run, and the between-run midgame ad never shares a screen with the revive offer (the UI enforces both).
+
+## 2026-11-17: Bloom buff
+
+- **Change:** Overgrowth now spreads the whole frontier twice, 0.6 s apart (was once).
+- **Why:** Bloom's single matches already averaged about 51%, but it was the weakest Core in runs. Early rivals have no AI, and Bloom gains little from launch aim or ultimate timing, so its ultimate needed to carry more.
+- **Result** (40 runs, Ascension 0):
+
+  | Drafter | Before | After |
+  | --- | --- | --- |
+  | Random | 31% | 42.5% |
+  | Synergy | 56% | 57.5% |
+
+- **Matchups after the change:** 35–60%. The lowest is vs Splitter at 35%.
+
+## 2026-11-17: Ascension reordered
+
+- **Old order:** rival AI from round 1 at tier 2, and 2 hearts at tier 6. That made a cliff at tier 2 (synergy run win rate 71% → 43%), and tier 8 at about 3%.
+- **New ramp, one rule per tier:**
+  1. Rivals carry +1 Mod.
+  2. No starting reroll.
+  3. Bosses on rounds 4, 7 and 10.
+  4. Rival AI from round 1.
+  5. Rival Mods +1 level.
+  6. Sharper rival AI.
+  7. Drafts offer one fewer Mod (this replaced "rivals carry another Mod").
+  8. 2 hearts.
+- **Measured** (30 runs per Core, synergy drafter): tier 4 averages 41% and tier 8 about 8% (0–23% per Core). The tier 8 lab player is a heuristic, so skilled players should do better. Bloom is the weakest Core at every tier and needs a buff.
+
 ## 2026-11-17: Stage C (retention features, Phase 6)
 
 - **Starting roster.** Old (Stage A): Ricochet, Splitter and 9 Mods. New: Ricochet, Splitter, Pulse and 14 Mods (Overclock, Growth Spurt, Chain Reaction, Shockwave, Head Start, Clash Engine, Wall Hugger, Scorched Trail, Ramparts, Underdog, Front Runner, Scavenger, Echo, Decoy); only one pickup Mod (Shockwave) is in it. Saves are merged, never trimmed: an existing save keeps everything it had and gains the new starters.

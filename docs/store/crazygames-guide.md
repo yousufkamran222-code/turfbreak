@@ -82,7 +82,7 @@ You do not need to build anything. Each tagged release includes the zip.
 
 1. Open https://github.com/yousufkamran222-code/turfbreak/releases
 2. Click the latest **Turfbreak v...** release (the one you tagged).
-3. Under **Assets**, download **`turfbreak-crazygames-v0.3.0.zip`** (the version in the name matches your tag).
+3. Under **Assets**, download **`turfbreak-crazygames-v0.5.0.zip`** (the version in the name matches your tag).
 
 Use the **tagged** release zip for submission. The `latest` pre-release also holds a portal zip, but its name has a commit hash, not a version. Use it only to test the newest build.
 
@@ -135,9 +135,9 @@ After submission:
 Full Launch is by selection. CrazyGames chooses games for it (official). Prepare for it in case you are selected. From the official page:
 
 - **The CrazyGames SDK is required.** The SDK script comes from CrazyGames. The game must call its `GameplayStart` event when the player reaches a playable state (`gameplayStart()` in the adapter).
-- **The game must land directly in gameplay** (official, Full column). The Gauntlet starts from the menu, so Full Launch might need a shortcut into a match.
+- **The game must land directly in gameplay** (official, Full column). A first-time player reaches a running match in about 3 seconds and 3 taps (Core, Mod, launch). Returning players see Home first, with Play one tap away. Check with CrazyGames whether that counts as landing in gameplay.
 - **Ads must run through the SDK**, following CrazyGames' guidelines. The game must work with an ad blocker (official).
-- **Ad placements** in the brief: rewarded ads for an extra reroll and a revive, and a between-run interstitial. These must not share a screen, because CrazyGames does not allow a midgame and a rewarded continue at the same break (brief 7.2). Check the current ad rules before building (brief 3.2).
+- **Ad placements (built):** a rewarded extra reroll in the draft and a rewarded revive on the run summary, plus a midgame ad between runs. They never share a screen, because CrazyGames does not allow a midgame and a rewarded continue at the same break (brief 7.2). No ads appear in a player's first run or in the Daily Clash. The adapter is `src/platform/crazygames.ts`.
 - **Full visual QA** (official, Full column).
 - **Monetisation** becomes available at Full Launch through the SDK. The official page says it is mainly ad revenue share, and only ads served through the SDK are allowed.
 

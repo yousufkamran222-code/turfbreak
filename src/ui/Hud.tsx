@@ -23,6 +23,11 @@ function ModChip({ pick, pulse }: { pick: ModPick; pulse: Signal<number> | undef
   );
 }
 
+/** Seconds as a clock: 16 becomes "0:16". */
+export function clock(secs: number): string {
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+}
+
 function formatStacks(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
@@ -45,9 +50,7 @@ function SideCard({ hud, side, core, look, mods }: { hud: HudState; side: SideIn
   return (
     <div class={`card side-${side}`}>
       <div class="card-name" style={{ color: look.color }}>
-        {look.colorWord}
-        <br />
-        {look.coreWord}
+        {look.name}
       </div>
       <div class="card-stack" ref={flashRef}>
         <span class="stack-label">{core.stackLabel}</span>
@@ -74,12 +77,17 @@ export function Hud({ hud, cores, looks, mods }: Props) {
   const phase = hud.phase.value;
   const secs = hud.secondsLeft.value;
   const stage = hud.stage.value;
-  const timer = stage === 'aiming' ? 'AIM' : phase === 'suddenDeath' ? 'SUDDEN DEATH' : phase === 'ended' ? 'FINAL' : `${secs}`;
+  const sudden = phase === 'suddenDeath';
+  const timer = stage === 'aiming' ? 'AIM' : sudden ? 'SUDDEN DEATH' : phase === 'ended' ? 'FINAL' : clock(secs);
+  const clockShown = stage !== 'aiming' && phase === 'running';
   return (
     <header class="hud">
       <div class="vs">
         <SideCard hud={hud} side={0} core={cores[0]} look={looks[0]} mods={mods[0]} />
-        <div class={`timer ${phase === 'running' && secs <= 10 ? 'urgent' : ''}`}>{timer}</div>
+        <div class={`timer ${phase === 'running' && secs <= 10 ? 'urgent' : ''} ${clockShown ? '' : 'word'}`}>
+          <span class="time">{timer}</span>
+          {clockShown && <span class="left-label">LEFT</span>}
+        </div>
         <SideCard hud={hud} side={1} core={cores[1]} look={looks[1]} mods={mods[1]} />
       </div>
       <div class="bar" ref={barRef} role="img" aria-label={`${a} cells to ${b}`}>

@@ -32,3 +32,12 @@ jobs:
       - run: npm run lab -- --seeds 100 --smoke --control rival:rival
       - run: npm run build:web
       - run: npm run check:size
+      # Fast UI smoke: one match in headless Chromium against vite preview (about a minute).
+      - run: npx playwright install chromium --with-deps
+      - run: node tools/ui-smoke.mjs --fast --shots ui-smoke-shots
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ui-smoke-screenshots
+          path: ui-smoke-shots
+          if-no-files-found: ignore

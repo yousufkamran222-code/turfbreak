@@ -79,6 +79,10 @@ export interface RunState {
   bonusOffers: number;
   /** Boss ids met so far in this rotation, so none repeats. */
   bossesMet: string[];
+  /** A rewarded-ad revive was used this run (once per run). */
+  revived: boolean;
+  /** The round whose draft already got a rewarded-ad reroll, or -1 (once per draft). */
+  adRerollRound: number;
 }
 
 const RNG_STREAM = 77;
@@ -266,6 +270,8 @@ export function startRun(o: {
     unlockedMods: o.unlockedMods ? [...o.unlockedMods] : null,
     bonusOffers: 0,
     bossesMet: [],
+    revived: false,
+    adRerollRound: -1,
   };
   return toDraft(base);
 }
@@ -357,6 +363,29 @@ export function finishMatch(run: RunState, r: { won: boolean; margin: number; wi
   return toDraft({ ...next, round: run.round + 1 });
 }
 
+/** Rewarded-ad placements (brief 7.2). Never in the Daily Clash, whose attempt must stay fair. */
+export function canRevive(run: RunState): boolean {
+  return run.phase === 'summary' && run.outcome === 'lost' && run.hearts <= 0 && !run.revived && run.mode !== 'daily';
+}
+
+/** Restore one heart once per run at zero hearts. A lost final round is played again. */
+export function revive(run: RunState): RunState {
+  if (!canRevive(run)) return run;
+  const rules = rulesFor(run.ascension);
+  const replay = !run.endless && run.round >= rules.rounds;
+  return toDraft({ ...run, hearts: 1, revived: true, outcome: null, round: replay ? run.round : run.round + 1 });
+}
+
+export function canAdReroll(run: RunState): boolean {
+  return run.phase === 'draft' && run.adRerollRound !== run.round && run.mode !== 'daily';
+}
+
+/** One extra reroll per draft for watching a rewarded ad. */
+export function adReroll(run: RunState): RunState {
+  if (!canAdReroll(run)) return run;
+  return { ...run, rerolls: run.rerolls + 1, adRerollRound: run.round };
+}
+
 /** From a won summary: keep going against rivals that scale until the hearts run out. */
 export function continueEndless(run: RunState): RunState {
   if (run.phase !== 'summary' || run.outcome !== 'won') return run;
@@ -443,5 +472,7 @@ export function parseRun(v: unknown): RunState | null {
     unlockedMods: isStrArr(v.unlockedMods) ? v.unlockedMods : null,
     bonusOffers: isNum(v.bonusOffers) ? Math.max(0, Math.floor(v.bonusOffers)) : 0,
     bossesMet: isStrArr(v.bossesMet) ? v.bossesMet : [],
+    revived: v.revived === true,
+    adRerollRound: isNum(v.adRerollRound) ? v.adRerollRound : -1,
   };
 }

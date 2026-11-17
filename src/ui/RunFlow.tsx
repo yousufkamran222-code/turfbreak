@@ -62,6 +62,10 @@ export function RunFlow({ game, onHome }: { game: Game; onHome(): void }) {
         onReroll={() => game.reroll()}
         onReplace={(id, slot) => game.replace(id, slot)}
         onHome={onHome}
+        adReroll={game.adRerollVisible}
+        onAdReroll={() => void game.adReroll()}
+        hintSeen={game.prefs.value.draftHintSeen === true}
+        onHintSeen={() => game.markDraftHintSeen()}
       />
     );
   }
@@ -74,11 +78,15 @@ export function RunFlow({ game, onHome }: { game: Game; onHome(): void }) {
         unlocked={game.unlocked.value}
         dailyDay={game.save.value.daily?.day}
         onEndless={() => game.endless()}
-        onAgain={() => game.begin(run.coreId, run.ascension)}
-        onHome={() => {
-          game.clearRun();
-          onHome();
-        }}
+        revive={game.reviveVisible}
+        onRevive={() => void game.revive()}
+        onAgain={() => void game.leaveSummary(() => game.begin(run.coreId, run.ascension))}
+        onHome={() =>
+          void game.leaveSummary(() => {
+            game.clearRun();
+            onHome();
+          })
+        }
       />
     );
   }
