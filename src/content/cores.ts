@@ -222,6 +222,9 @@ const bloomValues = {
   boostCap: 0.9,
   /** Controllers fire Overgrowth once the frontier is at least this many cells long. */
   overgrowthThreshold: 26,
+  /** Overgrowth spreads the whole frontier this many times, this far apart. */
+  overgrowthWaves: 2,
+  overgrowthGap: 0.6,
 };
 
 /** Spread one captured cell into an adjacent enemy cell, if it is still ours. */
@@ -262,7 +265,7 @@ export const bloom: CoreDef = {
   values: bloomValues,
   ultimate: {
     name: 'Overgrowth',
-    description: 'Every cell on your frontier spreads into an enemy neighbour at once.',
+    description: `Your whole frontier spreads into enemy neighbours, ${bloomValues.overgrowthWaves} times in quick succession.`,
     value: (world, side) => frontierCells(world, side).length,
     threshold: bloomValues.overgrowthThreshold,
   },
@@ -279,8 +282,12 @@ export const bloom: CoreDef = {
       });
     },
     onUltimate(ctx) {
-      for (const cell of frontierCells(ctx.world, ctx.side)) bloomSpread(ctx, cell);
-      ctx.triggered();
+      const wave = (c: AbilityContext): void => {
+        for (const cell of frontierCells(c.world, c.side)) bloomSpread(c, cell);
+        c.triggered();
+      };
+      wave(ctx);
+      for (let i = 1; i < bloomValues.overgrowthWaves; i++) ctx.after(bloomValues.overgrowthGap * i, wave);
     },
     onBoost(ctx, f) {
       setBloomChance(ctx, Math.max(ctx.counter(0), Math.min(bloomValues.boostCap, ctx.counter(0) * f)));

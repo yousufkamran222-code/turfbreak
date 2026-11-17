@@ -2,6 +2,19 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Bloom buff
+
+- **Change:** Overgrowth now spreads the whole frontier twice, 0.6 s apart (was once).
+- **Why:** Bloom's single matches already averaged about 51%, but it was the weakest Core in runs. Early rivals have no AI, and Bloom gains little from launch aim or ultimate timing, so its ultimate needed to carry more.
+- **Result** (40 runs, Ascension 0):
+
+  | Drafter | Before | After |
+  | --- | --- | --- |
+  | Random | 31% | 42.5% |
+  | Synergy | 56% | 57.5% |
+
+- **Matchups after the change:** 35–60%. The lowest is vs Splitter at 35%.
+
 ## 2026-11-17: Ascension reordered
 
 - **Old order:** rival AI from round 1 at tier 2, and 2 hearts at tier 6. That made a cliff at tier 2 (synergy run win rate 71% → 43%), and tier 8 at about 3%.
