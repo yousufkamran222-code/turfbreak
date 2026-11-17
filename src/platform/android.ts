@@ -42,11 +42,7 @@ export function createAndroidPlatform(): Platform {
       }
     },
     async storageSet(key, value) {
-      try {
-        await Preferences.set({ key, value });
-      } catch {
-        // A failed write must never crash the game.
-      }
+      await Preferences.set({ key, value });
     },
     haptic(kind) {
       void Haptics.impact({ style: impact[kind] }).catch(() => {});

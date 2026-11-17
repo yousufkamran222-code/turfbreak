@@ -60,11 +60,7 @@ export function createWebPlatform(id: PlatformId = 'web'): Platform {
       }
     },
     async storageSet(key, value) {
-      try {
-        window.localStorage.setItem(key, value);
-      } catch {
-        // Private mode or blocked storage: the game must keep running without saves.
-      }
+      window.localStorage.setItem(key, value);
     },
     haptic(kind) {
       try {

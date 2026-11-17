@@ -1,3 +1,4 @@
+import { needsTactical, tacticalDefault } from './input';
 import type { EndReason } from './events';
 import { stepWorld } from './step';
 import { createWorld, type MatchConfig, type SideIndex, type World } from './world';
@@ -41,6 +42,12 @@ export function summarize(world: World): MatchResult {
 export function runMatch(cfg: MatchConfig, onStep?: (world: World) => void): MatchResult {
   const world = createWorld({ recordEvents: false, ...cfg });
   while (world.phase !== 'ended') {
+    if (needsTactical(world)) {
+      // Queue fallback choices after any recorded decisions, preserving recorded intent.
+      for (const side of [0, 1] as const) if (world.tacticalChoices[side] === null && !world.pendingInputs.some((i) => i.type === 'tactical' && i.side === side)) {
+        world.pendingInputs.push({ step: world.step, side, type: 'tactical', choice: tacticalDefault(world, side) });
+      }
+    }
     stepWorld(world);
     onStep?.(world);
   }

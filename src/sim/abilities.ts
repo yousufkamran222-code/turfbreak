@@ -1,6 +1,13 @@
 import type { Rng } from './rng';
 import type { Runner, SideIndex, StatName, World } from './world';
 
+export type ScheduledEffect =
+  | { kind: 'core'; action: 'spread'; cell: number }
+  | { kind: 'core'; action: 'wave' | 'jump' | 'jump-cycle' }
+  | { kind: 'restore-radius'; factor: number }
+  | { kind: 'grant-ultimate' }
+  | { kind: 'echo-ultimate' };
+
 export type RunnerShape = 'diamond' | 'hexagon' | 'circle' | 'triangle' | 'square' | 'star' | 'pentagon' | 'octagon';
 
 export interface HitInfo {
@@ -48,8 +55,8 @@ export interface AbilityContext {
   swingBeam(): void;
   /** Spin the primary's beam through `turns` full circles, sweeping as it goes, reaching at most `maxReach`. */
   spinBeam(turns: number, maxReach: number): void;
-  /** Run `fn` after `seconds` of match time. It keeps this hook's identity, so `triggered()` flashes the right icon. */
-  after(seconds: number, fn: (ctx: AbilityContext) => void): void;
+  /** Schedule a serializable effect after `seconds` of match time. It keeps this hook's identity, so `triggered()` flashes the right icon. */
+  after(seconds: number, effect: ScheduledEffect): void;
   /** Add shield points to own cells ('all' = every cell this side owns). Each point absorbs one capture attempt. */
   shieldCells(cells: readonly number[] | 'all', points: number): void;
   /** Own cells in `cells` cannot be taken for `seconds`. */
@@ -77,6 +84,7 @@ export interface AbilityContext {
 }
 
 export interface CoreHooks {
+  onScheduled?(ctx: AbilityContext, effect: ScheduledEffect): void;
   onMatchStart?(ctx: AbilityContext): void;
   onStep?(ctx: AbilityContext): void;
   onHit?(ctx: AbilityContext, hit: HitInfo): void;

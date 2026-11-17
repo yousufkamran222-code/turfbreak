@@ -4,26 +4,30 @@
  * the rival's controller inputs too), so a short binary record is enough to
  * play it back with no controllers at all.
  *
- * Layout, all varints unless noted: format, major, minor, seed, core A, core B,
+ * Layout, all varints unless noted: format, major, minor, seed, ruleset, core A, core B,
  * per side: Mod count then (Mod index * 4 + level) each, twist flags and fields,
- * input count then per input: step delta, side * 2 + (ultimate ? 1 : 0) and,
+ * input count then per input: step delta, side * 3 + type (launch=0, ultimate=1, tactical=2), tactical choice index, and,
  * for a launch, dx and dy as float64 (a replay must be bit-exact). A 16-bit
  * checksum closes it. Indices count the sorted id lists, so the code is only
  * valid for the same major.minor build; patch releases never change content.
  */
+import { limits, integer, validBuild, validInputs, validTwist } from '../sim/validation';
+import { tuning } from '../content/tuning';
 import { cores } from '../content/cores';
 import { mods } from '../content/mods';
 import type { BuildEntry } from '../run/run';
 import { buildPicks } from '../run/run';
 import type { InputRecord } from '../sim/input';
-import type { MatchConfig, MatchTwist } from '../sim/world';
+import type { MatchConfig, MatchTwist, Ruleset } from '../sim/world';
 
-const FORMAT = 1;
+const FORMAT = 2;
+const RULESETS: readonly Ruleset[] = ['classic', 'recharge', 'tactical'];
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 export const APP_VERSION: string = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.0.0';
 
 export interface ReplayData {
+  ruleset?: Ruleset;
   /** Build version that recorded it, "major.minor.patch". */
   version: string;
   seed: number;
@@ -130,6 +134,7 @@ export function encodeReplay(d: ReplayData): string {
   w.varint(major);
   w.varint(minor);
   w.varint(d.seed);
+  w.varint(RULESETS.indexOf(d.ruleset ?? 'classic'));
   for (const id of d.cores) w.varint(Math.max(0, coreIds.indexOf(id)));
   for (const build of d.builds) {
     const known = build.filter((e) => modIds.includes(e.id));
@@ -154,7 +159,8 @@ export function encodeReplay(d: ReplayData): string {
   for (const inp of d.inputs) {
     w.varint(inp.step - prev);
     prev = inp.step;
-    w.varint(inp.side * 2 + (inp.type === 'ultimate' ? 1 : 0));
+    w.varint(inp.side * 3 + (inp.type === 'ultimate' ? 1 : inp.type === 'tactical' ? 2 : 0));
+    if (inp.type === 'tactical') w.varint(['speed', 'shield', 'recharge'].indexOf(inp.choice));
     if (inp.type === 'launch') {
       w.f64(inp.dx);
       w.f64(inp.dy);
@@ -170,6 +176,7 @@ const BAD = 'That replay code is damaged or incomplete.';
 /** Parse a code. Never throws; a code from another major.minor version gets a friendly refusal. */
 export function decodeReplay(code: string, currentVersion: string = APP_VERSION): DecodeResult {
   try {
+    if (code.length > limits.codeLength) return { ok: false, error: BAD };
     const bytes = fromBase64Url(code.trim());
     if (!bytes || bytes.length < 8) return { ok: false, error: BAD };
     const body = bytes.slice(0, -2);
@@ -186,13 +193,15 @@ export function decodeReplay(code: string, currentVersion: string = APP_VERSION)
       };
     }
     const seed = r.varint();
+    const ruleset = RULESETS[r.varint()];
+    if (!ruleset) return { ok: false, error: BAD };
     const ca = coreIds[r.varint()];
     const cb = coreIds[r.varint()];
     if (!ca || !cb) return { ok: false, error: BAD };
     const builds: BuildEntry[][] = [];
     for (let s = 0; s < 2; s++) {
       const n = r.varint();
-      if (n > 12) return { ok: false, error: BAD };
+      if (n > limits.mods) return { ok: false, error: BAD };
       const b: BuildEntry[] = [];
       for (let i = 0; i < n; i++) {
         const v = r.varint();
@@ -204,6 +213,7 @@ export function decodeReplay(code: string, currentVersion: string = APP_VERSION)
       builds.push(b);
     }
     const flags = r.varint();
+    if (flags > 31) return { ok: false, error: BAD };
     let twist: MatchTwist | null = null;
     if (flags !== 0) {
       const t: { -readonly [K in keyof MatchTwist]: MatchTwist[K] } = {};
@@ -215,21 +225,26 @@ export function decodeReplay(code: string, currentVersion: string = APP_VERSION)
       twist = t;
     }
     const count = r.varint();
-    if (count > 200) return { ok: false, error: BAD };
+    if (count > limits.inputs) return { ok: false, error: BAD };
     const inputs: InputRecord[] = [];
     let step = 0;
     for (let i = 0; i < count; i++) {
       step += r.varint();
       const v = r.varint();
-      const side = (v >> 1) as 0 | 1;
-      if (side > 1) return { ok: false, error: BAD };
-      if (v & 1) inputs.push({ step, side, type: 'ultimate' });
-      else inputs.push({ step, side, type: 'launch', dx: r.f64(), dy: r.f64() });
+      const side = Math.floor(v / 3) as 0 | 1;
+      if (v > 5) return { ok: false, error: BAD };
+      if (v % 3 === 1) inputs.push({ step, side, type: 'ultimate' });
+      else if (v % 3 === 2) {
+        const choice = (['speed', 'shield', 'recharge'] as const)[r.varint()];
+        if (!choice || ruleset !== 'tactical') return { ok: false, error: BAD };
+        inputs.push({ step, side, type: 'tactical', choice });
+      } else inputs.push({ step, side, type: 'launch', dx: r.f64(), dy: r.f64() });
     }
-    if (!r.done) return { ok: false, error: BAD };
+    if (!r.done || !integer(seed, 0, 0xffffffff) || (twist && !validTwist(twist)) ||
+        !builds.every((b) => validBuild(b, modIds)) || !validInputs(inputs, twist?.durationSeconds ?? tuning.match.durationSeconds, ruleset)) return { ok: false, error: BAD };
     return {
       ok: true,
-      data: { version: `${major}.${minor}.0`, seed, cores: [ca, cb], builds: [builds[0]!, builds[1]!], twist, inputs },
+      data: { version: `${major}.${minor}.0`, ruleset, seed, cores: [ca, cb], builds: [builds[0]!, builds[1]!], twist, inputs },
     };
   } catch {
     return { ok: false, error: BAD };
@@ -240,9 +255,11 @@ export function decodeReplay(code: string, currentVersion: string = APP_VERSION)
 export function replayConfig(d: ReplayData): MatchConfig | null {
   const a = cores.find((c) => c.id === d.cores[0]);
   const b = cores.find((c) => c.id === d.cores[1]);
-  if (!a || !b) return null;
+  if (!a || !b || !integer(d.seed, 0, 0xffffffff) || (d.twist && !validTwist(d.twist)) ||
+      !d.builds.every((v) => validBuild(v, modIds)) || !validInputs(d.inputs, d.twist?.durationSeconds ?? tuning.match.durationSeconds, d.ruleset)) return null;
   return {
     seed: d.seed,
+    ruleset: d.ruleset ?? 'classic',
     cores: [a, b],
     controllers: [null, null],
     inputs: d.inputs,

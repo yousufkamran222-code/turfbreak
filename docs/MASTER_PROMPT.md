@@ -646,3 +646,9 @@ Read CLAUDE.md and docs/PROGRESS.md. No new phase. Fix or tune only these,
 with the smallest changes that work:
 - ...
 ```
+
+## v0.7 implementation amendment (17 Nov 2026)
+
+The current release loop remains classic. Authorized agency prototypes are available only in development or `VITE_AGENCY_PLAYTEST=true` comparison builds: a 12-second passive ultimate recharge, and a single halftime choice of temporary speed, shield or ultimate readiness. Comparison runs use temporary progress; Daily and normal progression remain classic. Yousuf chooses the gameplay variant before final balancing. See `AGENCY_PLAYTEST.md` for the playtest, locked targets and validation seed ranges.
+
+External match data is bounded and validated. Delayed simulation effects must be serializable, and complete simulation hashing includes pending effects and controller state. Replay equivalence excludes controller state replaced by input records. Storage writes are ordered, failures are retained for retry, and SDK initialization/ad waits are bounded. v0.7 uses replay format 2 and retains valid existing save progress. Physical-device performance and portal/signed-release QA must be reported separately from desktop CI.

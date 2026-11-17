@@ -5,6 +5,7 @@ import type { Platform } from '../src/platform';
 import { fx } from '../src/render/fx';
 import { matchConfig, type RunState } from '../src/run/run';
 import { Game } from '../src/ui/game';
+import { comparisonGame } from '../src/ui/ComparisonScreen';
 import { clock } from '../src/ui/Hud';
 import { bestMoment } from '../src/ui/moment';
 
@@ -63,12 +64,14 @@ describe('clock', () => {
 });
 
 describe('Game', () => {
-  it('saves the run after every change and parses it back', () => {
+  it('saves the run after every change and parses it back', async () => {
     const p = fakePlatform();
     const game = new Game(p, synth, defaultSave());
     game.begin('ricochet', 0);
+    await game.flush();
     expect(parseSave(p.store.get(SAVE_KEY) ?? null).run?.phase).toBe('draft');
     game.pick(game.save.value.run!.offer[0]!);
+    await game.flush();
     const saved = parseSave(p.store.get(SAVE_KEY) ?? null).run as RunState;
     expect(saved.phase).toBe('match');
     expect(() => matchConfig(saved)).not.toThrow();
@@ -106,6 +109,7 @@ describe('Game', () => {
     game.markDraftHintSeen();
     game.setPrefs({ coreId: 'splitter', ascension: 0 });
     expect(game.prefs.value.draftHintSeen).toBe(true);
+    await game.flush();
     const again = new Game(p, synth, defaultSave());
     await again.loadPrefs();
     expect(again.prefs.value.draftHintSeen).toBe(true);
@@ -123,7 +127,7 @@ describe('Game', () => {
     expect(['ricochet', 'splitter']).toContain(game.prefs.value.coreId);
   });
 
-  it('settings apply at once: reduce motion zeroes juice, haptics gate the platform', () => {
+  it('settings apply at once: reduce motion zeroes juice, haptics gate the platform', async () => {
     const p = fakePlatform();
     const game = new Game(p, synth, defaultSave());
     game.setSettings({ reduceMotion: true, highContrast: true });
@@ -135,6 +139,7 @@ describe('Game', () => {
     game.haptic('heavy');
     expect(p.buzz).toEqual(['light']);
     expect(fx.intensity).toBe(1);
+    await game.flush();
     expect(parseSave(p.store.get(SAVE_KEY) ?? null).settings.haptics).toBe(false);
   });
 });
@@ -146,5 +151,25 @@ describe('bestMoment', () => {
     expect(bestMoment([h(1, false, 9)])).toBeNull();
     expect(bestMoment([h(1, true, 10), h(2, true, 30)])).toContain('won by 30');
     expect(bestMoment([h(1, true, 10, true), h(2, true, 30)])).toContain('WIPEOUT in round 1');
+  });
+});
+
+
+describe('comparison isolation', () => {
+  it('keeps normal progress and storage unchanged through a temporary run', async () => {
+    const p = fakePlatform();
+    const source = new Game(p, synth, defaultSave());
+    source.begin('ricochet', 0); await source.flush();
+    const before = JSON.stringify(source.save.value);
+    const stored = p.store.get(SAVE_KEY);
+    const temporary = comparisonGame(source, 'tactical', 17, 'ricochet');
+    temporary.reroll(); temporary.pick(temporary.save.value.run!.offer[0]!);
+    temporary.finish({ winner: 0, margin: 10, wipeout: false });
+    await temporary.flush();
+    expect(temporary.ruleset).toBe('tactical');
+    expect(JSON.stringify(source.save.value)).toBe(before);
+    expect(p.store.get(SAVE_KEY)).toBe(stored);
+    expect(temporary.save.value.stats.matchesWon).toBe(1);
+    temporary.dispose(); source.dispose();
   });
 });

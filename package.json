@@ -1,6 +1,6 @@
 {
   "name": "turfbreak",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "A build-then-watch territory roguelite.",
@@ -20,7 +20,9 @@
     "test:watch": "vitest",
     "check:size": "node tools/check-size.mjs dist",
     "check": "npm run lint && npm run typecheck && npm test",
-    "lab": "tsx tools/lab.ts"
+    "lab": "tsx tools/lab.ts",
+    "build:playtest": "VITE_PLATFORM=web VITE_AGENCY_PLAYTEST=true vite build",
+    "build:playtest:android": "VITE_PLATFORM=android VITE_AGENCY_PLAYTEST=true vite build"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.2",

@@ -210,3 +210,11 @@ Yousuf's feedback: matches felt too random because of Ricochet's beam, which mad
 - **Preact, `@preact/signals` and `d3-delaunay` are not installed yet.** Phase 0 has no menus and no Voronoi. They arrive with the phases that use them, so nothing unused sits in the lockfile.
 - **Release `versionCode` is the release workflow's run number plus 100000.** Old: "versionCode comes from the workflow run number". Reason: release and debug builds come from different workflows with separate run counters. The offset keeps release codes above every debug code and still increasing for Play.
 - **Main branch flow.** `main` was created with an initial commit; each phase is built on a branch and merged by pull request once CI is green (Yousuf's choice).
+
+## 17 Nov 2026 — v0.7 reliability and controlled agency comparison
+
+Authorized by Yousuf's implementation request and approved plan: add bounded replay/save validation, cap Endless starting primaries at the existing 32-per-side cap, serialize/retry persistence, bound SDK waits, and replace delayed closures with hashable effect payloads. Full state hashes now include controller state; replay equivalence uses a separate hash that excludes controllers replaced by the recording. Golden hash updates reflect wider hash coverage and new explicit ruleset state, not a classic balance retune.
+
+Keep the existing run difficulty targets and 10-round/3-heart loop. Compare classic with a 12-second rechargeable ultimate and a once-per-match halftime tactical choice. These are opt-in development/playtest builds, with isolated run progress and a separate Android application ID. Do not select a variant or perform final balance tuning before Yousuf's playtest decision. The balance lab adds ruleset/roster selection, per-Core Wilson intervals, round survival and economy first-pick opportunity-cost reports. Hold out seeds 10001–10500 from tuning.
+
+Bump to 0.7.0 and replay format 2 because ruleset/inputs and simulation compatibility change. Preserve valid existing save progress. No deployment or signed release is authorized by this implementation stage.

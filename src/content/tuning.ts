@@ -1,5 +1,11 @@
 /** Every tunable number lives here or in a content definition (MASTER_PROMPT 3.2 rule 5). */
 export const tuning = {
+  agency: {
+    rechargeSeconds: 12,
+    tacticalSpeed: 1.2,
+    tacticalSpeedSeconds: 6,
+    tacticalShieldSeconds: 3,
+  },
   sim: {
     /** Fixed simulation rate in steps per second. */
     stepsPerSecond: 60,

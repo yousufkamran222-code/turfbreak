@@ -3,7 +3,7 @@ import { cores } from '../src/content/cores';
 import { tuning } from '../src/content/tuning';
 import { decodeReplay, encodeReplay, majorMinor, replayConfig, replayParam, type ReplayData } from '../src/meta/replay';
 import { buildPicks, type BuildEntry } from '../src/run/run';
-import { hashWorld } from '../src/sim/hash';
+import { hashReplayState } from '../src/sim/hash';
 import { queueInput } from '../src/sim/input';
 import { stepWorld } from '../src/sim/step';
 import { createWorld, type MatchTwist, type World } from '../src/sim/world';
@@ -13,7 +13,7 @@ const heuristic = { kind: 'heuristic' as const, ...tuning.ai.rival };
 function finish(w: World): number {
   let guard = 0;
   while (w.phase !== 'ended' && guard++ < 100_000) stepWorld(w);
-  return hashWorld(w);
+  return hashReplayState(w);
 }
 
 /** Play a match the way the UI does (a human side 0 who aims and fires, a controller on side 1) and record it. */
@@ -33,7 +33,7 @@ function original(seed: number, a: string, b: string, builds: [BuildEntry[], Bui
     stepWorld(w);
   }
   const data: ReplayData = { version: '0.3.0', seed, cores: [a, b], builds, twist, inputs: [...w.inputLog] };
-  return { w, data, hash: hashWorld(w) };
+  return { w, data, hash: hashReplayState(w) };
 }
 
 const cases: [number, string, string, [BuildEntry[], BuildEntry[]], MatchTwist | null][] = [

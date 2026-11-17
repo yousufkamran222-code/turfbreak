@@ -51,3 +51,13 @@ Living design detail as it firms up. The brief (`MASTER_PROMPT.md` sections 5 an
 ## Balance notes
 
 - Ricochet's curve is steady and front-loaded: it usually leads mid-match. Splitter is slow then explosive: few splits before 20 s, then a late surge. Most Ricochet vs Splitter matches are a race between Ricochet's lead and Splitter's explosion, which is the crossing-curves shape 5.6 asks for.
+
+## v0.7 reliability and agency comparison
+
+Saves and replay links validate bounded match data before world allocation. Invalid active runs are discarded independently of settings, unlocks and lifetime stats. Per-key persistence serializes writes and coalesces pending values; failures retain the latest value for the next write/resume and show a status message. Background flush is best effort, never a guarantee after process termination.
+
+The CrazyGames adapter bounds boot (10 s), adblock detection (3 s), initial ad response (15 s) and started-ad completion (180 s). A timed-out ad disables subsequent requests for the session. Per-request completion guards ignore stale callbacks; visibility and the match's explicit pause overlay prevent automatic resumption over a user pause.
+
+Delayed simulation effects carry typed payloads rather than closures. Core hooks dispatch their own `onScheduled` effects; generic effects restore radius, grant readiness or echo an ultimate. Timer order and attribution are preserved. `hashWorld` includes controller state; `hashReplayState` compares physical simulation state without controllers, their RNG streams or their scheduling scratch, because recorded inputs replace those controllers. Presentation events are excluded from both.
+
+Replay format 2 carries the ruleset and tactical-choice inputs. v0.7 rejects older incompatible replay versions. Valid v2 saves retain progress and active runs use the current balance. Classic is still the release default. Opt-in comparison runs are temporary, use matched run seeds and cannot persist player progress. See `AGENCY_PLAYTEST.md` for exact prototype rules and the human selection gate.

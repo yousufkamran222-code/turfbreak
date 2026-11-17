@@ -17,10 +17,15 @@
  *                 Mods; both sides on the rival heuristic. Reports the win-rate change.
  *                 --cores a,b,c limits the Cores, --mods x,y the Mods, --levels 1,2,3 the levels.
  * --tension       the underdog boost on and off, both sides on the rival heuristic.
+ * --ruleset classic|recharge|tactical  explicitly selects the simulation variant (default classic).
+ * --roster starting|full  restricts whole-run player Cores/Mods (default full).
+ * --economy-impact  whole-run first-pick opportunity cost for economy Mods (synergy drafter).
  * --runs          whole runs headlessly: a random drafter and a synergy drafter (levels owned Mods,
  *                 then Mods sharing a group), the player on the rival heuristic. --seeds is runs per
  *                 Core and drafter (default 60), --ascension T the tier (default 0), --core id|all.
  */
+import { wilson } from './statistics';
+import { startingCores, startingMods } from '../src/content/unlocks';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { coreById, cores } from '../src/content/cores';
@@ -31,7 +36,7 @@ import type { ModPick } from '../src/sim/abilities';
 import type { ControllerSpec } from '../src/sim/input';
 import { checkInvariants } from '../src/sim/invariants';
 import { runMatch } from '../src/sim/match';
-import type { World } from '../src/sim/world';
+import type { Ruleset, World } from '../src/sim/world';
 import { Rng } from '../src/sim/rng';
 import { finishMatch, matchConfig, pickMod, rerollOffer, replaceMod, startRun, type RunState } from '../src/run/run';
 
@@ -40,6 +45,8 @@ type ControlName = 'none' | 'rival' | 'assist' | 'random';
 interface Args {
   a: string;
   b: string;
+  ruleset: Ruleset;
+  roster: 'starting' | 'full';
   seeds: number;
   start: number;
   report: string | null;
@@ -52,6 +59,7 @@ interface Args {
   modImpact: boolean;
   tension: boolean;
   runs: boolean;
+  economyImpact: boolean;
   ascension: number;
   core: string;
   cores: string[] | null;
@@ -69,6 +77,8 @@ function parseControl(v: string): [ControlName, ControlName] {
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
+    ruleset: 'classic',
+    roster: 'full',
     a: 'ricochet',
     b: 'splitter',
     seeds: 500,
@@ -83,6 +93,7 @@ function parseArgs(argv: string[]): Args {
     modImpact: false,
     tension: false,
     runs: false,
+    economyImpact: false,
     ascension: 0,
     core: 'all',
     cores: null,
@@ -100,9 +111,16 @@ function parseArgs(argv: string[]): Args {
     else if (k === '--input-value') args.inputValue = true;
     else if (k === '--mod-impact') args.modImpact = true;
     else if (k === '--tension') args.tension = true;
+    else if (k === '--economy-impact') args.economyImpact = true;
     else if (k === '--runs') args.runs = true;
     else if (v !== undefined) {
-      if (k === '--a') args.a = v;
+      if (k === '--ruleset') {
+        if (!['classic', 'recharge', 'tactical'].includes(v)) throw new Error('Invalid --ruleset');
+        args.ruleset = v as Ruleset;
+      } else if (k === '--roster') {
+        if (v !== 'starting' && v !== 'full') throw new Error('Invalid --roster');
+        args.roster = v;
+      } else if (k === '--a') args.a = v;
       else if (k === '--b') args.b = v;
       else if (k === '--seeds') {
         args.seeds = Number(v);
@@ -119,6 +137,8 @@ function parseArgs(argv: string[]): Args {
       i++;
     }
   }
+  if (!Number.isSafeInteger(args.seeds) || args.seeds < 1 || !Number.isSafeInteger(args.start) || args.start < 0 || args.start + args.seeds > 0xffffffff) throw new Error('Invalid seed range');
+  if (!Number.isInteger(args.ascension) || args.ascension < 0 || args.ascension > 8) throw new Error('Invalid Ascension');
   return args;
 }
 
@@ -190,6 +210,7 @@ function play(A: Side, B: Side, args: Args): Stats {
       const r = runMatch(
         {
           seed,
+          ruleset: args.ruleset,
           cores: [coreById(s0.core), coreById(s1.core)],
           controllers: [controller(s0.control), controller(s1.control)],
           mods: [s0.mods, s1.mods],
@@ -224,6 +245,7 @@ function play(A: Side, B: Side, args: Args): Stats {
 
 const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
 const pct = (n: number, d: number): string => `${((100 * n) / Math.max(1, d)).toFixed(1)}%`;
+const ci = (w: number, n: number): string => wilson(w, n).map((v) => `${(v * 100).toFixed(1)}%`).join('–');
 const pts = (x: number): string => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)} pts`;
 function quantile(xs: number[], q: number): number {
   const s = [...xs].sort((x, y) => x - y);
@@ -244,8 +266,8 @@ function describe(a: string, b: string, label: string, st: Stats, mirror: boolea
     `| --- | --- | --- |`,
     `| Games | ${st.games} | |`,
     mirror
-      ? `| Side 0 win rate (mirror) | ${pct(st.side0Wins, st.games)} | 48–52% |`
-      : `| ${a} win rate | ${pct(st.winsA, st.games)} | 40–60% |`,
+      ? `| Side 0 win rate (mirror) | ${pct(st.side0Wins, st.games)} | 45–55% |`
+      : `| ${a} win rate | ${pct(st.winsA, st.games)} | 35–65% |`,
     ...(mirror ? [] : [`| Side 0 win rate (bias check) | ${pct(st.side0Wins, st.games)} | ~50% |`]),
     `| Mean lead changes (hysteresis ${tuning.tension.leadHysteresis}) | ${mean(st.leadChanges).toFixed(2)} | ≥ 2 |`,
     `| Median time of final lead change | ${quantile(st.lastLeadChange, 0.5).toFixed(1)} s | late |`,
@@ -277,7 +299,7 @@ function inputValue(args: Args): string {
     'Side A uses the controller shown; side B is the rival heuristic. "None" never aims or fires its ultimate.',
     '',
     '| Pairing | None | Random | Heuristic | Heuristic vs none | Heuristic vs random |',
-    '| --- | --- | --- | --- | --- | --- |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const [a, b] of pairings(args)) {
     const rate = (c: ControlName): number => {
@@ -356,12 +378,14 @@ type DrafterName = 'random' | 'synergy';
  */
 const affinityCache = new Map<string, Map<string, number>>();
 const AFFINITY_SEEDS = 40;
-function affinity(coreId: string): Map<string, number> {
-  let table = affinityCache.get(coreId);
+function affinity(coreId: string, ruleset: Ruleset): Map<string, number> {
+  const key = `${ruleset}:${coreId}`;
+  let table = affinityCache.get(key);
   if (table) return table;
   table = new Map();
   const args = parseArgs([]);
   args.seeds = AFFINITY_SEEDS;
+  args.ruleset = ruleset;
   for (const m of mods) {
     if (m.run) {
       table.set(m.id, 0.5);
@@ -370,12 +394,12 @@ function affinity(coreId: string): Map<string, number> {
     const st = play({ core: coreId, control: 'rival', mods: [{ mod: m, level: 2 }] }, { core: coreId, control: 'rival', mods: [] }, args);
     table.set(m.id, st.winsA / st.games);
   }
-  affinityCache.set(coreId, table);
+  affinityCache.set(key, table);
   return table;
 }
 
 /** Take the next step of a draft with the named drafter. Returns the run in 'match' phase. */
-function draft(run: RunState, who: DrafterName, rng: Rng): RunState {
+function draft(run: RunState, who: DrafterName, rng: Rng, ruleset: Ruleset): RunState {
   const byId = (id: string) => mods.find((m) => m.id === id);
   const full = run.build.length >= 6;
   const options = run.offer.filter((id) => run.build.some((e) => e.id === id) || !full);
@@ -387,7 +411,7 @@ function draft(run: RunState, who: DrafterName, rng: Rng): RunState {
   }
   // Synergy: the Mods that measure best on this Core, with a bonus for levelling one it owns and a small
   // one for sharing a group with the build. Economy Mods (no match effect) come last.
-  const table = affinity(run.coreId);
+  const table = affinity(run.coreId, ruleset);
   const groups = run.build.map((e) => byId(e.id)?.group);
   const score = (id: string): number => {
     const m = byId(id);
@@ -402,7 +426,7 @@ function draft(run: RunState, who: DrafterName, rng: Rng): RunState {
     const again = rerollOffer(run);
     const opts = again.offer.filter((id) => again.build.some((e) => e.id === id) || !full);
     const p2 = best(opts);
-    if (p2 !== undefined && score(p2) >= (pick === undefined ? -1 : score(pick))) return draft(again, who, rng);
+    if (p2 !== undefined && score(p2) >= (pick === undefined ? -1 : score(pick))) return draft(again, who, rng, ruleset);
     run = again;
     pick = p2;
   }
@@ -421,17 +445,18 @@ interface RunStats {
   byRival: Record<string, { played: number; won: number }>;
 }
 
-function playRun(seed: number, coreId: string, ascension: number, who: DrafterName): RunState {
+function playRun(seed: number, coreId: string, ascension: number, who: DrafterName, args: Args, firstPick?: string): RunState {
   const rng = new Rng(seed, 91);
-  let run = startRun({ seed, coreId, ascension });
+  let run = startRun({ seed, coreId, ascension, ...(args.roster === 'starting' ? { unlockedMods: [...startingMods] } : {}) });
+  if (firstPick) run = pickMod({ ...run, offer: [firstPick] }, firstPick);
   const me: ControllerSpec = { kind: 'heuristic', ...tuning.ai.rival };
   while (run.phase !== 'summary') {
     if (run.phase === 'draft') {
-      run = draft(run, who, rng);
+      run = draft(run, who, rng, args.ruleset);
       continue;
     }
     const cfg = matchConfig(run);
-    const r = runMatch({ ...cfg, controllers: [me, cfg.controllers?.[1] ?? null], recordEvents: false });
+    const r = runMatch({ ...cfg, ruleset: args.ruleset, controllers: [me, cfg.controllers?.[1] ?? null], recordEvents: false });
     run = finishMatch(run, { won: r.winner === 0, margin: Math.abs(r.counts[0] - r.counts[1]), wipeout: r.reason === 'wipeout' });
   }
   return run;
@@ -439,14 +464,14 @@ function playRun(seed: number, coreId: string, ascension: number, who: DrafterNa
 
 function runsReport(args: Args): string {
   const n = args.seedsGiven ? args.seeds : 60;
-  const targets = args.core === 'all' ? cores.map((c) => c.id) : [args.core];
+  const targets = args.core === 'all' ? (args.roster === 'starting' ? [...startingCores] : cores.map((c) => c.id)) : [args.core];
   const rows: string[] = [
     `## Whole runs (Ascension ${args.ascension}, ${n} runs per Core and drafter)`,
     '',
     'Player on the rival heuristic. Round reached is the round of the last match played (10 = reached the final boss). Targets at tier 0: random 35-50%, synergy about 80%.',
     '',
-    '| Core | Drafter | Run win rate | Mean round reached | Match win rate | Sim time |',
-    '| --- | --- | --- | --- | --- | --- |',
+    '| Core | Drafter | Run win rate | 95% CI | Mean round reached | Match win rate | Sim time |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
   ];
   const total: Record<DrafterName, RunStats> = {
     random: { runs: 0, won: 0, roundReached: [], matchesWon: 0, matches: 0, byRound: [], byRival: {} },
@@ -458,7 +483,7 @@ function runsReport(args: Args): string {
       const st = total[who];
       const own: RunStats = { runs: 0, won: 0, roundReached: [], matchesWon: 0, matches: 0, byRound: [], byRival: {} };
       for (let seed = args.start; seed < args.start + n; seed++) {
-        const run = playRun(seed, core, args.ascension, who);
+        const run = playRun(seed, core, args.ascension, who, args);
         for (const s of [own, st]) {
           s.runs++;
           if (run.outcome === 'won') s.won++;
@@ -477,16 +502,19 @@ function runsReport(args: Args): string {
         }
       }
       rows.push(
-        `| ${core} | ${who} | ${pct(own.won, own.runs)} | ${mean(own.roundReached).toFixed(2)} | ${pct(own.matchesWon, own.matches)} | ${((performance.now() - t0) / 1000).toFixed(1)} s |`,
+        `| ${core} | ${who} | ${pct(own.won, own.runs)} | ${ci(own.won, own.runs)} | ${mean(own.roundReached).toFixed(2)} | ${pct(own.matchesWon, own.matches)} | ${((performance.now() - t0) / 1000).toFixed(1)} s |`,
       );
     }
   }
   if (targets.length > 1) {
     for (const who of ['random', 'synergy'] as const) {
       const st = total[who];
-      rows.push(`| **all** | ${who} | ${pct(st.won, st.runs)} | ${mean(st.roundReached).toFixed(2)} | ${pct(st.matchesWon, st.matches)} | |`);
+      rows.push(`| **all** | ${who} | ${pct(st.won, st.runs)} | pooled; see per-Core CI | ${mean(st.roundReached).toFixed(2)} | ${pct(st.matchesWon, st.matches)} | |`);
     }
   }
+  rows.push('', 'Round survival: fraction of runs reaching each round (random / synergy):', '');
+  for (let round = 1; round <= 10; round++) rows.push(`- R${round}: ${(['random', 'synergy'] as const).map((who) => pct(total[who].roundReached.filter((r) => r >= round).length, total[who].runs)).join(' / ')}`);
+  rows.push('', 'Intervals are Wilson 95% intervals for independent run seeds within a Core. Aggregate results pool different Cores and are descriptive. Side-swapped match samples are paired; do not treat them as independent.', '');
   rows.push('', 'Match win rate by round (all Cores in this report):', '', `| Drafter | ${Array.from({ length: 10 }, (_, i) => `R${i + 1}`).join(' | ')} |`, `| --- | ${Array.from({ length: 10 }, () => '---').join(' | ')} |`);
   for (const who of ['random', 'synergy'] as const) {
     const cells = Array.from({ length: 10 }, (_, i) => {
@@ -504,6 +532,26 @@ function runsReport(args: Args): string {
   return rows.join('\n');
 }
 
+/** Whole-run opportunity cost: force an economy Mod as pick one vs the ordinary synergy draft. */
+function economyReport(args: Args): string {
+  const n = args.seedsGiven ? args.seeds : 60;
+  const targets = args.core === 'all' ? (args.roster === 'starting' ? [...startingCores] : cores.map((c) => c.id)) : [args.core];
+  const rows = ['## Economy Mods: whole-run impact', '',
+    'Same run seeds and synergy drafter. Treatment forces the named Mod at level 1 as the first draft pick; baseline drafts normally. The difference includes the first-pick opportunity cost. No rewarded advantages.', '',
+    '| Core | Mod | Baseline wins | Treatment wins | Treatment 95% CI | Paired win delta |',
+    '| --- | --- | --- | --- | --- | --- |'];
+  for (const core of targets) {
+    const baseline = Array.from({ length: n }, (_, i) => playRun(args.start + i, core, args.ascension, 'synergy', args).outcome === 'won');
+    const baseWins = baseline.filter(Boolean).length;
+    for (const mod of mods.filter((m) => m.run && (args.roster === 'full' || startingMods.includes(m.id)))) {
+      let wins = 0;
+      for (let i = 0; i < n; i++) if (playRun(args.start + i, core, args.ascension, 'synergy', args, mod.id).outcome === 'won') wins++;
+      rows.push(`| ${core} | ${mod.id} | ${pct(baseWins, n)} | ${pct(wins, n)} | ${ci(wins, n)} | ${pts((wins - baseWins) / n)} |`);
+    }
+  }
+  return rows.join('\n');
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   setUnderdog(args.underdog);
@@ -511,8 +559,9 @@ function main(): void {
   if (args.inputValue) sections.push(inputValue(args));
   if (args.modImpact) sections.push(modImpact(args));
   if (args.tension) sections.push(tension(args));
+  if (args.economyImpact) sections.push(economyReport(args));
   if (args.runs) sections.push(runsReport(args));
-  if (!args.inputValue && !args.modImpact && !args.tension && !args.runs) {
+  if (!args.inputValue && !args.modImpact && !args.tension && !args.runs && !args.economyImpact) {
     for (const [a, b] of pairings(args)) {
       const A: Side = { core: a, control: args.control[0], mods: [] };
       const B: Side = { core: b, control: args.control[1], mods: [] };
@@ -524,7 +573,7 @@ function main(): void {
     const header = [
       '# Balance report',
       '',
-      `Seeds from ${args.start}, ${args.seeds} per case. Underdog boost ${args.underdog ? 'on' : 'off'}. Pickups ${args.pickups ? 'on' : 'off'}. Generated by \`npm run lab\`.`,
+      `Ruleset ${args.ruleset}; roster ${args.roster}. Seeds from ${args.start}, ${args.seeds} per case. Underdog boost ${args.underdog ? 'on' : 'off'}. Pickups ${args.pickups ? 'on' : 'off'}. Generated by \`npm run lab\`.`,
       '',
     ].join('\n');
     mkdirSync(dirname(args.report), { recursive: true });

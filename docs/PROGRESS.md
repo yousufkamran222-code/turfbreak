@@ -1,3 +1,23 @@
+# Current: v0.7 reliability and agency playtest (17 Nov 2026)
+
+Implemented on `fix/reliability-agency` from `e45a95e`. Classic remains the release default. **Yousuf's variant choice is required before gameplay selection or final balance tuning.** Nothing has been deployed or released.
+
+- Bounded replay/save validation, setup runner limits, and safe recovery of an invalid active run without discarding valid lifetime progress.
+- Ordered/coalescing persistence with retry, best-effort lifecycle flushing and visible failure status. Platform writes now propagate failures to the queue.
+- Bounded CrazyGames boot/adblock/ad waits; per-request guards ignore late callbacks and disable further ads after a timeout.
+- Serializable delayed effects and expanded deterministic hashes; separate replay-equivalence hash excludes controller-private state replaced by recorded inputs. Goldens changed because hash coverage and ruleset state expanded; classic balance was preserved.
+- Opt-in classic/recharge/tactical comparison runs with temporary storage, recorded choices, recharge HUD and simultaneous halftime boosts. Explicit exit returns to the selector. Android playtest APK uses a separate application ID.
+- Replay format 2 and package 0.7.0. Valid existing v2 save progress is retained; incompatible old replay codes are rejected.
+- Lab ruleset/roster arguments, per-Core Wilson intervals, round survival and whole-run economy opportunity-cost reports. Seed ranges and locked targets are in `AGENCY_PLAYTEST.md`.
+
+Verification: lint/typecheck; 269 unit and content-invariant tests across 25 files; standard browser smoke and all three comparison variants on 390×844 and 1280×720, including halftime pause/resume, next drafts and normal-save isolation; web, portal and Android web-asset builds with bundle budgets. CI also builds a separate playtest APK and uploads the comparison web build and screenshots. GitHub write access was restored after the initial HTTP 403 errors. The implementation is now on draft PR #10; native APK and browser CI results and playtest artifacts are tracked there.
+
+New baseline reports use seeds 1–200 for classic runs with both full and starting unlocks. The starting-roster synergy spread is still Splitter 94.5% vs Pulse 52.5%; the balance problem is **measured, not fixed**. The five-seed economy report is only a tool smoke test. Prototype invariant smoke reports cover 100 seeds each with both sides swapped. No held-out validation seeds were used for tuning.
+
+Next: download the comparison CI artifact, follow `AGENCY_PLAYTEST.md`, and choose classic/recharge/tactical/none yet. Then tune the selected loop against the locked targets. Physical-phone frame time/audio/haptics, portal SDK QA and signed releases remain unverified; no Android SDK or release secrets were used locally.
+
+---
+
 # Progress
 
 ## Autonomous build-out, Stages A–D (16–17 Nov 2026)

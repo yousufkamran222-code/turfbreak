@@ -26,7 +26,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       # Unit, invariant, determinism and golden-hash tests.
-      - run: npm test
+      # Keep the simulation suites within the two-core runner budget.
+      - run: npm test -- --maxWorkers=2
       # 100 seeds x 2 sides = 200 headless matches, both sides on the rival controller,
       # with invariants checked on every step.
       - run: npm run lab -- --seeds 100 --smoke --control rival:rival
@@ -35,9 +36,44 @@ jobs:
       # Fast UI smoke: one match in headless Chromium against vite preview (about a minute).
       - run: npx playwright install chromium --with-deps
       - run: node tools/ui-smoke.mjs --fast --shots ui-smoke-shots
+      # Separate opt-in comparison artifact; the normal web target stays classic.
+      - run: npm run build:playtest
+      - run: npm run check:size
+      - run: node tools/agency-smoke.mjs agency-smoke-shots
+      - uses: actions/upload-artifact@v7
+        with:
+          name: turfbreak-agency-playtest-web
+          path: dist
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ui-smoke-screenshots
-          path: ui-smoke-shots
+          path: |
+            ui-smoke-shots
+            agency-smoke-shots
           if-no-files-found: ignore
+
+  playtest-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - run: npm ci
+      - run: npm run build:playtest:android
+      - run: npx cap sync android
+      - name: Assemble isolated playtest APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon -PagencyPlaytest -PversionCode=${{ github.run_number }} -PversionName=0.7.0
+      - uses: actions/upload-artifact@v7
+        with:
+          name: turfbreak-agency-playtest-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk

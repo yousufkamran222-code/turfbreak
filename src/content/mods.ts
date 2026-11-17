@@ -577,10 +577,7 @@ export const mods: readonly ModDef[] = [
         if (used >= at(l, [1, 1, 2])) return;
         ctx.setCounter(slot('quick-hands'), used + 1);
         ctx.triggered();
-        ctx.after(at(l, [24, 16, 11]), (c) => {
-          c.grantUltimate();
-          c.triggered();
-        });
+        ctx.after(at(l, [24, 16, 11]), { kind: 'grant-ultimate' });
       },
     },
   },

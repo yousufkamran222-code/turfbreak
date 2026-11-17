@@ -107,6 +107,6 @@ export function rivalTier(round: number): ScaledTier {
     picks: last.picks + past * e.picksPerRound,
     levelBonus: last.levelBonus + Math.floor(past / e.levelEvery),
     controller: true,
-    extraPrimaries: Math.floor(past / e.extraPrimaryEvery),
+    extraPrimaries: Math.min(31, Math.floor(past / e.extraPrimaryEvery)),
   };
 }

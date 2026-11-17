@@ -1,3 +1,5 @@
+import { Persistence } from '../meta/persistence';
+import type { Ruleset } from '../sim/world';
 import { track } from '../meta/analytics';
 import { signal } from '@preact/signals';
 import type { Synth } from '../audio/synth';
@@ -63,13 +65,22 @@ export class Game {
   /** Feats just met, for the "UNLOCKED" banner. Not saved. */
   readonly newFeats = signal<Feat[]>([]);
   readonly platform: Platform;
+  readonly saveFailed = signal(false);
+  private readonly persistence: Persistence;
+  ruleset: Ruleset = 'classic';
+  private readonly lifecycle: (() => void)[] = [];
+  dispose(): void { for (const off of this.lifecycle) off(); }
+  flush(): Promise<void> { return this.persistence.flush(); }
 
   constructor(
     platform: Platform,
     readonly synth: Synth,
     initial: Save,
+    readonly temporary = false,
   ) {
-    this.platform = withDevFakeAds(platform);
+    this.platform = temporary ? platform : withDevFakeAds(platform);
+    this.persistence = new Persistence((key, value) => this.platform.storageSet(key, value), (failed) => { this.saveFailed.value = failed; });
+    this.lifecycle.push(platform.onPause(() => { void this.flush(); }), platform.onResume(() => { void this.flush(); }));
     this.save.value = initial;
     this.applySettings();
   }
@@ -98,7 +109,7 @@ export class Game {
     const ascension = Math.max(0, Math.min(maxTier(s, coreId), Math.floor(p.ascension)));
     const seen = p.draftHintSeen ?? this.prefs.value.draftHintSeen ?? false;
     this.prefs.value = seen ? { coreId, ascension, draftHintSeen: true } : { coreId, ascension };
-    if (persist) void this.platform.storageSet(PREFS_KEY, JSON.stringify(this.prefs.value));
+    if (persist) this.persistence.set(PREFS_KEY, JSON.stringify(this.prefs.value));
   }
 
   /** Remember that the first-draft hint was shown, so it never shows again. */
@@ -113,7 +124,7 @@ export class Game {
 
   commit(next: Save): void {
     this.save.value = next;
-    void this.platform.storageSet(SAVE_KEY, serializeSave(next));
+    this.persistence.set(SAVE_KEY, serializeSave(next));
   }
 
   /** Push the settings into the audio buses, the renderer and the page. */
@@ -148,7 +159,7 @@ export class Game {
     this.unlocked.value = null;
     this.setPrefs({ coreId, ascension: tier });
     this.setRun(run, this.countRun(s.stats, coreId));
-    track('run_start', { core: coreId, ascension: tier, mode: 'standard' });
+    if (!this.temporary) track('run_start', { core: coreId, ascension: tier, mode: 'standard' });
   }
 
   private countRun(stats: Save['stats'], coreId: string): Save['stats'] {
@@ -167,7 +178,7 @@ export class Game {
     this.unlocked.value = null;
     this.newFeats.value = [];
     this.commit({ ...s, run, daily: { day, result: null }, stats: this.countRun(s.stats, coreId) });
-    track('run_start', { core: coreId, ascension: 0, mode: 'daily' });
+    if (!this.temporary) track('run_start', { core: coreId, ascension: 0, mode: 'daily' });
   }
 
   pick(modId: string | null): void {
@@ -187,7 +198,7 @@ export class Game {
 
   /** Record a match: run state, stats, records, feats and, on a first win at a tier, the next Ascension. */
   finish(o: MatchOutcome): void {
-    track('match_end', { won: o.winner === 0, margin: o.margin, round: this.save.value.run?.round ?? 0 });
+    if (!this.temporary) track('match_end', { won: o.winner === 0, margin: o.margin, round: this.save.value.run?.round ?? 0 });
     const done = applyMatch(this.save.value, o);
     if (done.save === this.save.value) return;
     if (done.ascension !== null) this.unlocked.value = done.ascension;

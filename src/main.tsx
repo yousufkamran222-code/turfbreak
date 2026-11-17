@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { Synth } from './audio/synth';
-import { parseSave, SAVE_KEY, serializeSave } from './meta/save';
+import { parseSave, SAVE_KEY } from './meta/save';
 import { createPlatform } from './platform';
 import { App } from './ui/App';
 import { Game } from './ui/game';
@@ -13,9 +13,10 @@ async function start(): Promise<void> {
   // A corrupt or unreadable save parses to defaults; it never throws.
   const save = parseSave(await platform.storageGet(SAVE_KEY));
   save.launches++;
-  await platform.storageSet(SAVE_KEY, serializeSave(save));
+  // The queued write below retries failures without blocking startup.
 
   const game = new Game(platform, new Synth(), save);
+  game.commit(save);
   await game.loadPrefs();
 
   const root = document.getElementById('app');
