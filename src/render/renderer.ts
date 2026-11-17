@@ -3,6 +3,7 @@ import { beamLength } from '../sim/step';
 import { statValue, type World } from '../sim/world';
 import type { Juice } from './juice';
 import { tuning } from '../content/tuning';
+import { fx } from './fx';
 import { mix, rgba } from './colors';
 
 export const BACKGROUND = '#0b0d12';
@@ -86,6 +87,28 @@ export class ArenaRenderer {
     this.ctx = ctx;
   }
 
+  private stripes: CanvasPattern | null = null;
+
+  /** A 14 px tile of dark diagonal stripes, in device pixels (the caller cancels the world scale). */
+  private stripePattern(): CanvasPattern | null {
+    if (this.stripes) return this.stripes;
+    const tile = document.createElement('canvas');
+    tile.width = 14;
+    tile.height = 14;
+    const t = tile.getContext('2d');
+    if (!t) return null;
+    t.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    t.lineWidth = 4;
+    t.beginPath();
+    for (const o of [-14, 0, 14]) {
+      t.moveTo(o, 14);
+      t.lineTo(o + 14, 0);
+    }
+    t.stroke();
+    this.stripes = this.ctx.createPattern(tile, 'repeat');
+    return this.stripes;
+  }
+
   setPalettes(p: [SidePalette, SidePalette]): void {
     this.palettes = p;
   }
@@ -141,6 +164,31 @@ export class ArenaRenderer {
       for (let i = 0; i < owner.length; i++) if (owner[i] === s) c.fill(this.cellPaths[i]!);
     }
 
+    // High contrast: side 1 also wears diagonal stripes, so the sides never rely on colour alone.
+    if (fx.highContrast) {
+      const stripes = this.stripePattern();
+      if (stripes) {
+        stripes.setTransform(new DOMMatrix().scale(unit));
+        c.fillStyle = stripes;
+        for (let i = 0; i < owner.length; i++) if (owner[i] === 1) c.fill(this.cellPaths[i]!);
+      }
+    }
+
+    // Shields: per-cell shield points brighten the cell; a side-wide Shield makes the whole side shimmer.
+    const cs = world.cellShield;
+    c.fillStyle = 'rgba(255, 255, 255, 0.16)';
+    for (let i = 0; i < owner.length; i++) {
+      if (cs[i]! > 0) {
+        c.fill(this.cellPaths[i]!);
+        if (cs[i]! > 1) c.fill(this.cellPaths[i]!);
+      }
+    }
+    for (const s of [0, 1] as const) {
+      if (world.sides[s].shieldSteps <= 0) continue;
+      c.fillStyle = `rgba(255, 255, 255, ${(0.1 + 0.06 * Math.sin(now * 10)).toFixed(3)})`;
+      for (let i = 0; i < owner.length; i++) if (owner[i] === s) c.fill(this.cellPaths[i]!);
+    }
+
     // Thin, lighter cell edges.
     c.strokeStyle = 'rgba(255, 255, 255, 0.10)';
     c.lineWidth = 1.2 * unit;
@@ -159,7 +207,7 @@ export class ArenaRenderer {
     }
     c.lineCap = 'round';
     c.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    c.lineWidth = 2.5 * unit;
+    c.lineWidth = (fx.highContrast ? 4.5 : 2.5) * unit;
     c.stroke();
 
     // Capture pops draw above cells but below runners, so the frontier stays legible.
@@ -226,7 +274,7 @@ export class ArenaRenderer {
     juice.drawCallouts(c, [this.palettes[0].beam, this.palettes[1].beam], now);
     if (overlay.flash > 0) {
       c.setTransform(1, 0, 0, 1, 0, 0);
-      c.fillStyle = `rgba(255, 255, 255, ${(0.55 * overlay.flash * tuning.juice.intensity).toFixed(3)})`;
+      c.fillStyle = `rgba(255, 255, 255, ${(0.55 * overlay.flash * fx.intensity).toFixed(3)})`;
       c.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
   }

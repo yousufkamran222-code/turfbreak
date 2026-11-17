@@ -36,6 +36,9 @@ export function hashWorld(world: World): number {
   const h = new Hasher();
   h.u32(world.step);
   h.bytes(world.owner);
+  h.bytes(world.cellShield);
+  for (let i = 0; i < world.cellLockUntil.length; i++) h.u32(world.cellLockUntil[i]!);
+  h.u32(world.timers.length);
   h.u32(world.runners.length);
   for (const r of world.runners) {
     h.f64(r.x);
@@ -58,6 +61,7 @@ export function hashWorld(world: World): number {
     h.u32(s.overflow);
     h.u32(s.ultimates);
     h.u32(s.ultimatesUsed);
+    h.u32(s.slowSteps);
     h.u32(s.surgeSteps);
     h.u32(s.shieldSteps);
     h.u32(s.pickups);

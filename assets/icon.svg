@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Turfbreak mark: two territories, a bright frontier, and a runner breaking through. -->
+  <rect width="1024" height="1024" fill="#0b0d12"/>
+  <path d="M0 0H560L470 210L600 400L430 560L540 760L420 1024H0Z" fill="#ff3355"/>
+  <path d="M560 0H1024V1024H420L540 760L430 560L600 400L470 210Z" fill="#7a3cff"/>
+  <g fill="none" stroke="#0b0d12" stroke-opacity=".22" stroke-width="10">
+    <path d="M0 300L230 250L470 210M230 250L300 520L430 560M0 640L300 520M300 520L250 800L420 1024M250 800L0 880"/>
+    <path d="M1024 240L780 300L600 400M780 300L760 560L540 760M1024 620L760 560M760 560L800 830L1024 900M800 830L620 1024"/>
+  </g>
+  <path d="M560 0L470 210L600 400L430 560L540 760L420 1024" fill="none" stroke="#fff" stroke-width="26" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M250 512H640" stroke="#ffd0d8" stroke-width="30" stroke-linecap="round"/>
+  <path d="M250 512H640" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+  <path d="M690 400L802 512L690 624L578 512Z" fill="#ff3355" stroke="#fff" stroke-width="30" stroke-linejoin="round"/>
+</svg>

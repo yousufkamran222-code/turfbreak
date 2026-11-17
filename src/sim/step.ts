@@ -1,11 +1,13 @@
 import { tuning } from '../content/tuning';
 import { runControllers } from './ai';
 import { findCell } from './arena';
-import { applyPendingInputs, runUltimate } from './input';
+import { applyPendingInputs } from './input';
 import { updatePickups } from './pickups';
 import type { CaptureCause, EndReason } from './events';
 import { rotateSmall } from './vec';
 import { emit, statValue, type Runner, type SideIndex, type World } from './world';
+
+const shieldAbsorbSteps = Math.round(tuning.shield.absorbSeconds * tuning.sim.stepsPerSecond);
 
 function other(side: SideIndex): SideIndex {
   return side === 0 ? 1 : 0;
@@ -17,7 +19,9 @@ function updateSpeedFactors(world: World): void {
   for (const s of [0, 1] as const) {
     const deficit = (world.counts[other(s)] - world.counts[s]) / n;
     const underdog = deficit > 0 ? 1 + Math.min(tuning.tension.underdogMax, tuning.tension.underdogPerShare * deficit) : 1;
-    world.sides[s].speedFactor = underdog * world.sides[s].surgeMul;
+    const st = world.sides[s];
+    if (st.slowSteps > 0 && --st.slowSteps === 0) st.slowMul = 1;
+    st.speedFactor = underdog * st.surgeMul * st.slowMul;
   }
 }
 
@@ -38,7 +42,18 @@ export function capture(world: World, cell: number, side: SideIndex, cause: Capt
   const prev = world.owner[cell]!;
   if (prev === side || world.phase === 'ended') return;
   // A Shield pickup makes the owner's cells untakeable for a moment.
-  if ((prev === 0 || prev === 1) && world.sides[prev].shieldSteps > 0) return;
+  if (prev === 0 || prev === 1) {
+    if (world.sides[prev].shieldSteps > 0) return;
+    if (world.step < world.cellLockUntil[cell]!) return;
+    // Per-cell shields: each point absorbs one attempt, then the cell shrugs off attempts for a moment.
+    if (world.step - world.cellShieldStep[cell]! < shieldAbsorbSteps) return;
+    if (world.cellShield[cell]! > 0) {
+      world.cellShield[cell]!--;
+      world.cellShieldStep[cell] = world.step;
+      emit(world, { type: 'ShieldHit', step: world.step, cell, owner: prev });
+      return;
+    }
+  }
   world.owner[cell] = side;
   world.counts[side]++;
   if (prev === 0 || prev === 1) world.counts[prev]--;
@@ -54,6 +69,18 @@ export function capture(world: World, cell: number, side: SideIndex, cause: Capt
     if (!m.mod.hooks.onCapture) continue;
     world.currentMod = i;
     m.mod.hooks.onCapture(ctx, cell, m.level);
+  }
+  if (prev === 0 || prev === 1) {
+    const lost = world.sides[prev];
+    const lctx = world.contexts[prev];
+    world.currentMod = -1;
+    lost.core.hooks.onCellLost?.(lctx, cell);
+    for (let i = 0; i < lost.mods.length; i++) {
+      const m = lost.mods[i]!;
+      if (!m.mod.hooks.onCellLost) continue;
+      world.currentMod = i;
+      m.mod.hooks.onCellLost(lctx, cell, m.level);
+    }
   }
   world.currentMod = mod;
   if (world.phase === 'suddenDeath') endMatch(world, side, 'suddenDeath');
@@ -270,7 +297,19 @@ function updateLead(world: World): void {
       world.lastLeadChangeStep = world.step;
     }
     world.leader = leader;
-    if (leader !== -1) emit(world, { type: 'LeadChange', step: world.step, leader });
+    if (leader !== -1) {
+      emit(world, { type: 'LeadChange', step: world.step, leader });
+      for (const s of [0, 1] as const) {
+        const st = world.sides[s];
+        for (let i = 0; i < st.mods.length; i++) {
+          const m = st.mods[i]!;
+          if (!m.mod.hooks.onLeadChange) continue;
+          world.currentMod = i;
+          m.mod.hooks.onLeadChange(world.contexts[s], leader === s, m.level);
+        }
+        world.currentMod = -1;
+      }
+    }
   }
   if (world.step <= world.matchSteps / 2) {
     const n = world.arena.cellCount;
@@ -291,8 +330,11 @@ export function stepWorld(world: World): void {
 
   applyPendingInputs(world);
   runControllers(world);
-  while (world.scheduled.length > 0 && world.scheduled[0]!.step <= world.step) {
-    runUltimate(world, world.scheduled.shift()!.side, true);
+  while (world.timers.length > 0 && world.timers[0]!.step <= world.step) {
+    const t = world.timers.shift()!;
+    world.currentMod = t.mod;
+    t.fn(world.contexts[t.side]);
+    world.currentMod = -1;
   }
   updateSpeedFactors(world);
 
@@ -303,6 +345,10 @@ export function stepWorld(world: World): void {
     st.core.hooks.onStep?.(ctx);
     for (let i = 0; i < st.mods.length; i++) {
       const m = st.mods[i]!;
+      if (m.mod.hooks.onStep) {
+        world.currentMod = i;
+        m.mod.hooks.onStep(ctx, m.level);
+      }
       if (!m.mod.hooks.onInterval || !m.mod.intervalSeconds) continue;
       const every = Math.max(1, Math.round(m.mod.intervalSeconds(m.level) * tuning.sim.stepsPerSecond));
       if (world.step % every !== 0) continue;

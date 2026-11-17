@@ -3,7 +3,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'android', 'node_modules', 'coverage'] },
+  { ignores: ['dist', 'android', 'node_modules', 'coverage', '.claude'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {

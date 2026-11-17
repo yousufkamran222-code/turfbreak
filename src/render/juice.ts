@@ -1,4 +1,5 @@
 import { tuning } from '../content/tuning';
+import { fx } from './fx';
 import type { SimEvent } from '../sim/events';
 import { Rng, Stream } from '../sim/rng';
 import type { World } from '../sim/world';
@@ -41,7 +42,7 @@ export class Juice {
   }
 
   feed(ev: SimEvent, world: World, now: number): void {
-    const k = J.intensity;
+    const k = fx.intensity;
     switch (ev.type) {
       case 'CellCaptured': {
         const delay = Math.min(this.batch++ * J.popStagger, J.popStaggerMax);
@@ -77,6 +78,16 @@ export class Juice {
         this.trauma += 0.6 * k;
         break;
       }
+      case 'ShieldHit': {
+        const cen = world.arena.centroids;
+        this.rings.push({ x: cen[ev.cell * 2]!, y: cen[ev.cell * 2 + 1]!, t: now, color: ev.owner, from: 34, to: 10, dur: 0.22 });
+        break;
+      }
+      case 'Teleport':
+        this.rings.push({ x: ev.fromX, y: ev.fromY, t: now, color: ev.side, from: 50, to: 6, dur: 0.3 });
+        this.rings.push({ x: ev.x, y: ev.y, t: now, color: ev.side, from: 6, to: 90, dur: 0.35 });
+        this.sparks(ev.x, ev.y, ev.side, Math.round(12 * k), 360);
+        break;
       case 'Blast':
         this.rings.push({ x: ev.x, y: ev.y, t: now, color: ev.side, from: 20, to: ev.radius, dur: 0.4 });
         this.sparks(ev.x, ev.y, ev.side, Math.round(14 * k), 380);
@@ -122,13 +133,13 @@ export class Juice {
 
   callout(text: string, x: number, y: number, color: number, tier: number): void {
     this.callouts.push({ text, x, y, t: -1, color, size: 46 + tier * 14 });
-    this.trauma = Math.min(1, this.trauma + (0.15 + tier * 0.1) * J.intensity);
-    this.sparks(x, y, color, Math.round((10 + tier * 8) * J.intensity), 320);
+    this.trauma = Math.min(1, this.trauma + (0.15 + tier * 0.1) * fx.intensity);
+    this.sparks(x, y, color, Math.round((10 + tier * 8) * fx.intensity), 320);
   }
 
   /** A burst of sparks across the arena in the winner's colour. */
   confetti(side: number, size: number): void {
-    for (let i = 0; i < 6; i++) this.sparks(size * (0.15 + 0.14 * i), size * 0.5, side, Math.round(24 * J.intensity), 700);
+    for (let i = 0; i < 6; i++) this.sparks(size * (0.15 + 0.14 * i), size * 0.5, side, Math.round(24 * fx.intensity), 700);
   }
 
   update(dt: number, now: number): void {
@@ -163,14 +174,14 @@ export class Juice {
         this.popStart[i] = -1;
         continue;
       }
-      const s = 1 + J.popScale * Math.sin(Math.PI * t) * J.intensity;
+      const s = 1 + J.popScale * Math.sin(Math.PI * t) * fx.intensity;
       const cx = cen[i * 2]!;
       const cy = cen[i * 2 + 1]!;
       c.save();
       c.translate(cx, cy);
       c.scale(s, s);
       c.translate(-cx, -cy);
-      c.fillStyle = `rgba(255, 255, 255, ${(0.55 * (1 - t)).toFixed(3)})`;
+      c.fillStyle = `rgba(255, 255, 255, ${(0.55 * (1 - t) * (fx.intensity > 0 ? 1 : 0)).toFixed(3)})`;
       c.fill(paths[i]!);
       c.restore();
     }

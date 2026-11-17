@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Adaptive icon foreground: content sits inside the centre safe zone (about 66%). -->
+  <g transform="translate(512 512) scale(.62) translate(-512 -512)">
+    <path d="M40 40H560L470 210L600 400L430 560L540 760L440 984H40Z" fill="#ff3355"/>
+    <path d="M560 40H984V984H440L540 760L430 560L600 400L470 210Z" fill="#7a3cff"/>
+    <path d="M560 40L470 210L600 400L430 560L540 760L440 984" fill="none" stroke="#fff" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M250 512H640" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
+    <path d="M690 400L802 512L690 624L578 512Z" fill="#ff3355" stroke="#fff" stroke-width="34" stroke-linejoin="round"/>
+  </g>
+</svg>

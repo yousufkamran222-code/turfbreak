@@ -15,11 +15,16 @@
  *                 side B with the rival heuristic, on the same seeds.
  * --mod-impact    each Mod at level 1 and 3 added to side A, against the same Core with no
  *                 Mods; both sides on the rival heuristic. Reports the win-rate change.
+ *                 --cores a,b,c limits the Cores, --mods x,y the Mods, --levels 1,2,3 the levels.
  * --tension       the underdog boost on and off, both sides on the rival heuristic.
+ * --runs          whole runs headlessly: a random drafter and a synergy drafter (levels owned Mods,
+ *                 then Mods sharing a group), the player on the rival heuristic. --seeds is runs per
+ *                 Core and drafter (default 60), --ascension T the tier (default 0), --core id|all.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { coreById, cores } from '../src/content/cores';
+import { bosses } from '../src/content/bosses';
 import { mods } from '../src/content/mods';
 import { tuning } from '../src/content/tuning';
 import type { ModPick } from '../src/sim/abilities';
@@ -27,6 +32,8 @@ import type { ControllerSpec } from '../src/sim/input';
 import { checkInvariants } from '../src/sim/invariants';
 import { runMatch } from '../src/sim/match';
 import type { World } from '../src/sim/world';
+import { Rng } from '../src/sim/rng';
+import { finishMatch, matchConfig, pickMod, rerollOffer, replaceMod, startRun, type RunState } from '../src/run/run';
 
 type ControlName = 'none' | 'rival' | 'assist' | 'random';
 
@@ -44,6 +51,13 @@ interface Args {
   inputValue: boolean;
   modImpact: boolean;
   tension: boolean;
+  runs: boolean;
+  ascension: number;
+  core: string;
+  cores: string[] | null;
+  mods: string[] | null;
+  levels: number[];
+  seedsGiven: boolean;
 }
 
 function parseControl(v: string): [ControlName, ControlName] {
@@ -68,6 +82,13 @@ function parseArgs(argv: string[]): Args {
     inputValue: false,
     modImpact: false,
     tension: false,
+    runs: false,
+    ascension: 0,
+    core: 'all',
+    cores: null,
+    mods: null,
+    levels: [1, 3],
+    seedsGiven: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
@@ -79,10 +100,18 @@ function parseArgs(argv: string[]): Args {
     else if (k === '--input-value') args.inputValue = true;
     else if (k === '--mod-impact') args.modImpact = true;
     else if (k === '--tension') args.tension = true;
+    else if (k === '--runs') args.runs = true;
     else if (v !== undefined) {
       if (k === '--a') args.a = v;
       else if (k === '--b') args.b = v;
-      else if (k === '--seeds') args.seeds = Number(v);
+      else if (k === '--seeds') {
+        args.seeds = Number(v);
+        args.seedsGiven = true;
+      } else if (k === '--ascension') args.ascension = Number(v);
+      else if (k === '--core') args.core = v;
+      else if (k === '--cores') args.cores = v.split(',');
+      else if (k === '--mods') args.mods = v.split(',');
+      else if (k === '--levels') args.levels = v.split(',').map(Number);
       else if (k === '--start') args.start = Number(v);
       else if (k === '--report') args.report = v;
       else if (k === '--control') args.control = parseControl(v);
@@ -266,18 +295,20 @@ function inputValue(args: Args): string {
 
 /** Each Mod's effect on win rate when added to a Core facing the same Core without Mods. */
 function modImpact(args: Args): string {
+  const coreList = args.cores ? args.cores.map((id) => coreById(id)) : cores;
+  const modList = args.mods ? args.mods.map((id) => mods.find((m) => m.id === id) ?? coreFail(id)) : mods;
   const rows: string[] = [
     '## Mod impact',
     '',
     'Side A has the Mod; side B is the same Core with none. Both use the rival heuristic. 50% means no effect.',
     '',
-    `| Mod | Rarity | ${cores.map((c) => `${c.name} L1 | ${c.name} L3`).join(' | ')} |`,
-    `| --- | --- | ${cores.map(() => '--- | ---').join(' | ')} |`,
+    `| Mod | Rarity | ${coreList.map((c) => args.levels.map((l) => `${c.name} L${l}`).join(' | ')).join(' | ')} |`,
+    `| --- | --- | ${coreList.map(() => args.levels.map(() => '---').join(' | ')).join(' | ')} |`,
   ];
-  for (const m of mods) {
+  for (const m of modList) {
     const cells: string[] = [];
-    for (const c of cores) {
-      for (const level of [1, 3]) {
+    for (const c of coreList) {
+      for (const level of args.levels) {
         const st = play({ core: c.id, control: 'rival', mods: [{ mod: m, level }] }, { core: c.id, control: 'rival', mods: [] }, args);
         cells.push(pct(st.winsA, st.games));
       }
@@ -286,6 +317,10 @@ function modImpact(args: Args): string {
   }
   rows.push('');
   return rows.join('\n');
+}
+
+function coreFail(id: string): never {
+  throw new Error(`Unknown mod ${id}`);
 }
 
 /** The tension metrics with the underdog boost on and off, both sides on the rival heuristic. */
@@ -312,6 +347,163 @@ function tension(args: Args): string {
   return rows.join('\n');
 }
 
+type DrafterName = 'random' | 'synergy';
+
+/**
+ * What an informed player knows: how well each Mod (at level 2) does on a Core, measured against the
+ * same Core with no Mods. Computed once per Core and cached, so a synergy drafter picks Mods that suit
+ * its Core instead of guessing from group names.
+ */
+const affinityCache = new Map<string, Map<string, number>>();
+const AFFINITY_SEEDS = 40;
+function affinity(coreId: string): Map<string, number> {
+  let table = affinityCache.get(coreId);
+  if (table) return table;
+  table = new Map();
+  const args = parseArgs([]);
+  args.seeds = AFFINITY_SEEDS;
+  for (const m of mods) {
+    if (m.run) {
+      table.set(m.id, 0.5);
+      continue;
+    }
+    const st = play({ core: coreId, control: 'rival', mods: [{ mod: m, level: 2 }] }, { core: coreId, control: 'rival', mods: [] }, args);
+    table.set(m.id, st.winsA / st.games);
+  }
+  affinityCache.set(coreId, table);
+  return table;
+}
+
+/** Take the next step of a draft with the named drafter. Returns the run in 'match' phase. */
+function draft(run: RunState, who: DrafterName, rng: Rng): RunState {
+  const byId = (id: string) => mods.find((m) => m.id === id);
+  const full = run.build.length >= 6;
+  const options = run.offer.filter((id) => run.build.some((e) => e.id === id) || !full);
+  if (who === 'random') {
+    const id = run.offer[rng.int(run.offer.length)];
+    if (id === undefined) return pickMod(run, null);
+    if (run.build.some((e) => e.id === id) || !full) return pickMod(run, id);
+    return replaceMod(run, id, rng.int(run.build.length));
+  }
+  // Synergy: the Mods that measure best on this Core, with a bonus for levelling one it owns and a small
+  // one for sharing a group with the build. Economy Mods (no match effect) come last.
+  const table = affinity(run.coreId);
+  const groups = run.build.map((e) => byId(e.id)?.group);
+  const score = (id: string): number => {
+    const m = byId(id);
+    if (!m) return -1;
+    if (m.run) return -5;
+    const up = run.build.find((e) => e.id === id);
+    return (table.get(id) ?? 0.5) * 100 + (up ? 4 + up.level * 2 : 0) + (groups.includes(m.group) ? 2 : 0);
+  };
+  const best = (ids: string[]): string | undefined => [...ids].sort((x, y) => score(y) - score(x))[0];
+  let pick = best(options);
+  if ((pick === undefined || score(pick) < 56) && run.rerolls > 0) {
+    const again = rerollOffer(run);
+    const opts = again.offer.filter((id) => again.build.some((e) => e.id === id) || !full);
+    const p2 = best(opts);
+    if (p2 !== undefined && score(p2) >= (pick === undefined ? -1 : score(pick))) return draft(again, who, rng);
+    run = again;
+    pick = p2;
+  }
+  return pick === undefined ? pickMod(run, null) : pickMod(run, pick);
+}
+
+interface RunStats {
+  runs: number;
+  won: number;
+  roundReached: number[];
+  matchesWon: number;
+  matches: number;
+  /** Per round (index 0 = round 1): matches played and won. */
+  byRound: { played: number; won: number }[];
+  /** By rival: a boss's name, or the rival's Core name. */
+  byRival: Record<string, { played: number; won: number }>;
+}
+
+function playRun(seed: number, coreId: string, ascension: number, who: DrafterName): RunState {
+  const rng = new Rng(seed, 91);
+  let run = startRun({ seed, coreId, ascension });
+  const me: ControllerSpec = { kind: 'heuristic', ...tuning.ai.rival };
+  while (run.phase !== 'summary') {
+    if (run.phase === 'draft') {
+      run = draft(run, who, rng);
+      continue;
+    }
+    const cfg = matchConfig(run);
+    const r = runMatch({ ...cfg, controllers: [me, cfg.controllers?.[1] ?? null], recordEvents: false });
+    run = finishMatch(run, { won: r.winner === 0, margin: Math.abs(r.counts[0] - r.counts[1]), wipeout: r.reason === 'wipeout' });
+  }
+  return run;
+}
+
+function runsReport(args: Args): string {
+  const n = args.seedsGiven ? args.seeds : 60;
+  const targets = args.core === 'all' ? cores.map((c) => c.id) : [args.core];
+  const rows: string[] = [
+    `## Whole runs (Ascension ${args.ascension}, ${n} runs per Core and drafter)`,
+    '',
+    'Player on the rival heuristic. Round reached is the round of the last match played (10 = reached the final boss). Targets at tier 0: random 35-50%, synergy about 80%.',
+    '',
+    '| Core | Drafter | Run win rate | Mean round reached | Match win rate | Sim time |',
+    '| --- | --- | --- | --- | --- | --- |',
+  ];
+  const total: Record<DrafterName, RunStats> = {
+    random: { runs: 0, won: 0, roundReached: [], matchesWon: 0, matches: 0, byRound: [], byRival: {} },
+    synergy: { runs: 0, won: 0, roundReached: [], matchesWon: 0, matches: 0, byRound: [], byRival: {} },
+  };
+  for (const core of targets) {
+    for (const who of ['random', 'synergy'] as const) {
+      const t0 = performance.now();
+      const st = total[who];
+      const own: RunStats = { runs: 0, won: 0, roundReached: [], matchesWon: 0, matches: 0, byRound: [], byRival: {} };
+      for (let seed = args.start; seed < args.start + n; seed++) {
+        const run = playRun(seed, core, args.ascension, who);
+        for (const s of [own, st]) {
+          s.runs++;
+          if (run.outcome === 'won') s.won++;
+          s.roundReached.push(run.history.length);
+          s.matches += run.history.length;
+          s.matchesWon += run.history.filter((h) => h.won).length;
+          for (const h of run.history) {
+            const cell = (s.byRound[h.round - 1] ??= { played: 0, won: 0 });
+            cell.played++;
+            if (h.won) cell.won++;
+            const key = bosses.some((b) => b.name === h.rivalName) ? h.rivalName : (h.rivalName.split(' ').pop() ?? h.rivalName);
+            const rv = (s.byRival[key] ??= { played: 0, won: 0 });
+            rv.played++;
+            if (h.won) rv.won++;
+          }
+        }
+      }
+      rows.push(
+        `| ${core} | ${who} | ${pct(own.won, own.runs)} | ${mean(own.roundReached).toFixed(2)} | ${pct(own.matchesWon, own.matches)} | ${((performance.now() - t0) / 1000).toFixed(1)} s |`,
+      );
+    }
+  }
+  if (targets.length > 1) {
+    for (const who of ['random', 'synergy'] as const) {
+      const st = total[who];
+      rows.push(`| **all** | ${who} | ${pct(st.won, st.runs)} | ${mean(st.roundReached).toFixed(2)} | ${pct(st.matchesWon, st.matches)} | |`);
+    }
+  }
+  rows.push('', 'Match win rate by round (all Cores in this report):', '', `| Drafter | ${Array.from({ length: 10 }, (_, i) => `R${i + 1}`).join(' | ')} |`, `| --- | ${Array.from({ length: 10 }, () => '---').join(' | ')} |`);
+  for (const who of ['random', 'synergy'] as const) {
+    const cells = Array.from({ length: 10 }, (_, i) => {
+      const c = total[who].byRound[i];
+      return c ? pct(c.won, c.played) : '-';
+    });
+    rows.push(`| ${who} | ${cells.join(' | ')} |`);
+  }
+  const names = [...new Set(['random', 'synergy'].flatMap((w) => Object.keys(total[w as DrafterName].byRival)))].sort();
+  rows.push('', 'Player match win rate by opponent (bosses by name, others by Core):', '', `| Drafter | ${names.join(' | ')} |`, `| --- | ${names.map(() => '---').join(' | ')} |`);
+  for (const who of ['random', 'synergy'] as const) {
+    rows.push(`| ${who} | ${names.map((n) => { const c = total[who].byRival[n]; return c ? pct(c.won, c.played) : '-'; }).join(' | ')} |`);
+  }
+  rows.push('');
+  return rows.join('\n');
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   setUnderdog(args.underdog);
@@ -319,7 +511,8 @@ function main(): void {
   if (args.inputValue) sections.push(inputValue(args));
   if (args.modImpact) sections.push(modImpact(args));
   if (args.tension) sections.push(tension(args));
-  if (!args.inputValue && !args.modImpact && !args.tension) {
+  if (args.runs) sections.push(runsReport(args));
+  if (!args.inputValue && !args.modImpact && !args.tension && !args.runs) {
     for (const [a, b] of pairings(args)) {
       const A: Side = { core: a, control: args.control[0], mods: [] };
       const B: Side = { core: b, control: args.control[1], mods: [] };
@@ -331,7 +524,7 @@ function main(): void {
     const header = [
       '# Balance report',
       '',
-      `Seeds ${args.start}–${args.start + args.seeds - 1}. Underdog boost ${args.underdog ? 'on' : 'off'}. Pickups ${args.pickups ? 'on' : 'off'}. Generated by \`npm run lab\`.`,
+      `Seeds from ${args.start}, ${args.seeds} per case. Underdog boost ${args.underdog ? 'on' : 'off'}. Pickups ${args.pickups ? 'on' : 'off'}. Generated by \`npm run lab\`.`,
       '',
     ].join('\n');
     mkdirSync(dirname(args.report), { recursive: true });

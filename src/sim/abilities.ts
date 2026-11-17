@@ -19,6 +19,8 @@ export interface SpawnOptions {
  */
 export interface AbilityContext {
   readonly side: SideIndex;
+  /** The opposing side. */
+  readonly enemy: SideIndex;
   readonly world: Readonly<World>;
   readonly rng: Rng;
   stacks(): number;
@@ -46,6 +48,28 @@ export interface AbilityContext {
   swingBeam(): void;
   /** Spin the primary's beam through `turns` full circles, sweeping as it goes, reaching at most `maxReach`. */
   spinBeam(turns: number, maxReach: number): void;
+  /** Run `fn` after `seconds` of match time. It keeps this hook's identity, so `triggered()` flashes the right icon. */
+  after(seconds: number, fn: (ctx: AbilityContext) => void): void;
+  /** Add shield points to own cells ('all' = every cell this side owns). Each point absorbs one capture attempt. */
+  shieldCells(cells: readonly number[] | 'all', points: number): void;
+  /** Own cells in `cells` cannot be taken for `seconds`. */
+  lockCells(cells: readonly number[], seconds: number): void;
+  /** Move a runner to (x, y) instantly. */
+  teleport(runner: Runner, x: number, y: number): void;
+  /** Turn a runner toward (tx, ty) by at most `maxRadians` (capped at 0.3 per call). */
+  steer(runner: Runner, tx: number, ty: number, maxRadians: number): void;
+  /** Multiply the enemy side's speed by `mul` for `seconds`. */
+  slowEnemy(mul: number, seconds: number): void;
+  /** Hand `n` of this side's frontier cells to the enemy, without firing capture hooks (match setup effects). */
+  cedeCells(n: number): void;
+  /** Seconds of regular match time left (0 in sudden death). */
+  secondsLeft(): number;
+  /** Cells this side owns minus cells the enemy owns. */
+  lead(): number;
+  /** Grow the Core's signature by `factor` (1.25 = 25% more). Each Core decides what that means via `onBoost`. */
+  boostCore(factor: number): void;
+  /** Make the ultimate ready again. */
+  grantUltimate(): void;
   /** Fire the Core's ultimate effect again in `seconds` (Encore). Does not use up a charge. */
   echoUltimate(seconds: number): void;
   /** Announce that the Core or the Mod running this hook just fired, so the HUD can flash it. */
@@ -57,6 +81,13 @@ export interface CoreHooks {
   onStep?(ctx: AbilityContext): void;
   onHit?(ctx: AbilityContext, hit: HitInfo): void;
   onCapture?(ctx: AbilityContext, cell: number): void;
+  /** One of this side's cells was just taken by the enemy. */
+  onCellLost?(ctx: AbilityContext, cell: number): void;
+  /**
+   * A Mod asked the Core to grow its signature by `factor` (Compound, Echo, Buzzer Beater).
+   * Every Core must implement this so those Mods work with it.
+   */
+  onBoost?(ctx: AbilityContext, factor: number): void;
   /** The Core's ultimate. Fires when the side uses it (once per match unless a pickup or Mod says otherwise). */
   onUltimate?(ctx: AbilityContext): void;
 }
@@ -89,6 +120,14 @@ export interface CoreDef {
   readonly hooks: CoreHooks;
 }
 
+export interface RunEffects {
+  /** Rerolls gained after each win. */
+  rerollsPerWin?: number;
+  /** Extra Mods offered in the next draft after winning by at least `bigWinMargin` cells. */
+  extraOffers?: number;
+  bigWinMargin?: number;
+}
+
 export type Rarity = 'common' | 'uncommon' | 'rare';
 
 /** Mod hooks receive the Mod's level (1 to 3). */
@@ -96,6 +135,15 @@ export interface ModHooks {
   onMatchStart?(ctx: AbilityContext, level: number): void;
   onHit?(ctx: AbilityContext, hit: HitInfo, level: number): void;
   onCapture?(ctx: AbilityContext, cell: number, level: number): void;
+  onCellLost?(ctx: AbilityContext, cell: number, level: number): void;
+  /** The Core's signature just fired (the Core called `triggered()`). */
+  onCoreTrigger?(ctx: AbilityContext, level: number): void;
+  /** One of this side's runners grabbed a pickup of the given kind id. */
+  onPickup?(ctx: AbilityContext, kind: string, level: number): void;
+  /** Every step. Keep it cheap: use it for "while behind" style conditions. */
+  onStep?(ctx: AbilityContext, level: number): void;
+  /** The lead changed hands; `ahead` is whether this side now leads. */
+  onLeadChange?(ctx: AbilityContext, ahead: boolean, level: number): void;
   onUltimate?(ctx: AbilityContext, level: number): void;
   /** Runs every `intervalSeconds(level)` seconds of match time. */
   onInterval?(ctx: AbilityContext, level: number): void;
@@ -111,6 +159,8 @@ export interface ModDef {
   /** Effect text at a level, with its numbers filled in. */
   text(level: number): string;
   intervalSeconds?(level: number): number;
+  /** Effects on the run rather than the match (economy Mods). The run logic reads these. */
+  run?(level: number): RunEffects;
   readonly hooks: ModHooks;
 }
 
