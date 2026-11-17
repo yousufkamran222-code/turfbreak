@@ -4,30 +4,30 @@ exports[`determinism > matches golden final hashes; update them only for a delib
 [
   {
     "counts": [
-      67,
-      115,
+      94,
+      88,
     ],
-    "hash": 9443822,
+    "hash": 2401638131,
     "seed": 1,
-    "winner": 1,
+    "winner": 0,
   },
   {
     "counts": [
-      49,
-      133,
+      93,
+      89,
     ],
-    "hash": 1284213853,
+    "hash": 2005173253,
     "seed": 2,
-    "winner": 1,
+    "winner": 0,
   },
   {
     "counts": [
-      90,
       92,
+      90,
     ],
-    "hash": 1632245774,
+    "hash": 2587162509,
     "seed": 3,
-    "winner": 1,
+    "winner": 0,
   },
 ]
 `;
