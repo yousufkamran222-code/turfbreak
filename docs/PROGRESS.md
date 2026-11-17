@@ -1,5 +1,70 @@
 # Progress
 
+## Autonomous build-out, Stages A–D (16–17 Nov 2026)
+
+**Status: feature-complete against the brief's Phases 3–7, pending Yousuf's own play test.** Yousuf asked for several hours of autonomous work. The plan and agent contracts are in `STAGE_PLAN.md`; every design call is in `DECISIONS.md` (sections dated 16 and 17 Nov). Agents (Sonnet and Haiku, a few on Opus early on) built in parallel git worktrees. I merged, verified and tuned.
+
+### What the game has now
+- **Content:**
+  - **8 Cores,** each with its own signature, ultimate and boost behaviour: Ricochet, Splitter, Pulse, Bloom, Fortress, Phantom, Juggernaut, Leech.
+  - **30 Mods,** three levels each: 12 common, 12 uncommon, 7 rare.
+  - **4 pickups.**
+- **The run:**
+  - 10 rounds, 3 hearts, rerolls, skip and replace with a build cap of 6.
+  - Bosses on rounds 5 and 10: The Twins, The Wall, The Landlord and The Marathon, each with a match twist.
+  - Ascension tiers 1–8, and Endless after a won run.
+- **In a match:** drag to aim the launch, then one ultimate per match.
+- **Satisfaction layer:** streak callouts and climbing audio, ultimate slow motion, a generated beat, shields and teleports drawn and voiced, and a match-end freeze with confetti.
+- **UI:**
+  - Home (one tap to Play or Continue), a first-launch flow (about 3 s and 3 taps to a match), Core select and the draft (reroll, skip, replace; a one-time hint).
+  - The VS card with named Mods and tap-to-inspect, plus boss twists.
+  - The match HUD with a clock and Mod chips that flash, the run summary, and a pause overlay on the back button and on backgrounding.
+  - Settings: music and effects volume, haptics, reduce motion, high contrast, auto-play, and version and commit.
+  - A desktop layout with build panels and a trigger log.
+- **Retention:**
+  - Unlocks: start with 3 Cores and 14 Mods; 21 feats unlock the rest.
+  - Collection with lifetime stats.
+  - Daily Clash (seeded by date, an emoji share grid, a streak that is never punished).
+  - Versus Lab, replay codes (`?replay=` links that reproduce a match exactly), and clip export (web).
+- **Platforms:**
+  - The CrazyGames SDK v3 adapter: loading and gameplay events, data, rewarded and midgame ads, and an adblock check.
+  - Revive and rewarded-reroll rules, with no ads in the first run or in Daily.
+  - App icon, splash and favicon from SVG.
+  - A privacy page served from GitHub Pages only.
+- **Store kit:** the listing, a Play Console guide, a CrazyGames guide and an index (`docs/store/`).
+
+### How it was verified
+- **`npm run check`: 209 tests.** They include:
+  - a content matrix: every Core against every Core, and every Mod at levels 1 and 3, with invariants on every step
+  - determinism and golden hashes
+  - replay codes reproducing the original match's final state hash
+  - run rules, revive and ad reroll, save migration v1→v2, and unlocks
+  - a performance test: a maxed-out match averages 0.024 ms per step, with the 99th percentile under 2 ms
+- **Lab** (`docs/balance/stageA*.md`, both sides on the rival heuristic):
+  - **Core matrix:** every pairing 35–64%.
+  - **Mod impact:** no Mod above 90% at level 3.
+  - **Run win rate at Ascension 0:** random drafter 47%, synergy drafter 71% (target about 80%; see below).
+  - **Ascension:** tier 4 about 41%, tier 8 about 8% (synergy drafter).
+- **Agent playtests (Playwright, 390×844 and 1280×720, no console errors):**
+  - first launch, draft, VS card, aim, match, result, summary, Endless
+  - resume after a reload, pause, settings persisting, a corrupt save
+  - Collection, Daily, Versus Lab, replay links
+  - Round 1's findings (unnamed Mods on the VS card, unclear reroll and skip, a debug seed showing, a weak ultimate-ready state, the aim hint overlapping the arena) were fixed. A latent bug where hit-stop dropped sim time at 2x/4x was also fixed.
+
+### Known gaps
+- **Fun is unconfirmed.** Agents can find bugs and confusion, not fun. Yousuf's last verdict (on the redirect build) was "not fun". This build has not been played by him.
+- **Synergy runs win 71%, not about 80%.** At Ascension 0 the lab player only matches an un-Modded rival in rounds 1–3, so smarter drafting cannot lift early rounds much. The fix would be stronger early draft impact or 4 hearts; it was left for Yousuf's feel.
+- **Core spread in runs** (synergy, Ascension 0): Splitter 91% at the top, Bloom 57% at the bottom (after its buff).
+- **A few Mods above 70% at level 1 on one Core:** Quick Hands on Phantom, Encore on Leech, Second Wind on Pulse.
+- **Android:** clip export is hidden (needs `@capacitor/filesystem`). Frame rate and haptics are untested on a real phone with the new effects.
+- **Replay codes** only play on the same major.minor version, so bump the minor whenever sim or content numbers change.
+- **Release:** `release.yml` is still untested until the signing secrets exist. The CrazyGames adapter is untested inside the portal (needs the developer account and QA tool).
+
+### Next (for Yousuf)
+1. Play a few runs on the phone (web or APK) and say what feels good, flat or unfair.
+2. Pick the title, then follow `docs/store/README.md`. Recruit 12 testers early (14-day closed test).
+3. Add the signing secrets and ask for a `v0.x.0` tag to test `release.yml`.
+
 ## Phase 2: agency (fun gate, 2026-11-15)
 
 **Status: third play test, on the Gauntlet.** Two rounds of play testing rejected the tap-to-redirect ("doesn't feel satisfying or fun at all"). Yousuf chose a mostly-watched match with a launch aim and one ultimate, pickups that stay and also become Mods, and a satisfaction pass plus a mini draft. Phase 3 must not start until he says matches are satisfying and drafting is fun.
