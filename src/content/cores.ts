@@ -142,7 +142,10 @@ export const splitter: CoreDef = {
     onBoost(ctx, f) {
       const r = ctx.primary();
       if (!r) return;
-      const n = Math.max(1, Math.floor((ctx.world.sides[ctx.side].runnerCount - 1) * (f - 1)));
+      // Fractional splits accumulate in counter 1, so small boosts are worth a small share of a split.
+      const owed = ctx.counter(1) + Math.max(2, ctx.world.sides[ctx.side].runnerCount - 1) * (f - 1);
+      const n = Math.floor(owed);
+      ctx.setCounter(1, owed - n);
       for (let i = 0; i < n; i++) {
         if (ctx.spawnRunner(r, { radiusMul: splitterValues.splitRadius, speedMul: splitterValues.splitSpeed })) ctx.addStacks(1);
       }
@@ -213,8 +216,8 @@ const bloomValues = {
   /** Seconds before a captured cell spreads. */
   spreadDelay: 2,
   /** Spread chance at match start, gained per capture, and its cap (boosts may reach `boostCap`). */
-  startChance: 0.44,
-  chancePerCapture: 0.004,
+  startChance: 0.56,
+  chancePerCapture: 0.006,
   maxChance: 0.8,
   boostCap: 0.9,
   /** Controllers fire Overgrowth once the frontier is at least this many cells long. */
@@ -287,7 +290,7 @@ export const bloom: CoreDef = {
 
 const fortressValues = {
   /** Captures needed per shield wave. */
-  shieldEvery: 140,
+  shieldEvery: 155,
   /** A wave adds one shield point to each of your cells below this many. */
   cellCap: 1,
   /** Bastion: shield points on every cell, and seconds your cells cannot be taken. */
@@ -351,7 +354,7 @@ const phantomValues = {
   minInterval: 2,
   boostFloor: 1.5,
   /** Radius captured where it lands. */
-  blastRadius: 195,
+  blastRadius: 200,
   /** Blink Storm: jumps and the seconds between them. */
   stormJumps: 4,
   stormGap: 0.4,

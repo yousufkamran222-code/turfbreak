@@ -2,6 +2,18 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Stage A balance pass (Mods, Cores, run scaling)
+
+Reports: `docs/balance/stageA2-*.md`.
+
+- **Mods nerfed to the targets** (common L1 at most about 70%, rare L3 at most about 90%): Overclock, Compound, Echo, Buzzer Beater, Head Start, Wall Hugger, Scorched Trail, Ramparts, Landmines, Front Runner, Glass Cannon, Decoy, Bulwark, Quick Hands, Second Wind; Growth Spurt raised.
+- **Behaviour changes.** Ramparts and Front Runner shield a limited number of cells per tick (they shielded the whole territory). Echo has a cooldown (Juggernaut triggers every second). Scorched Trail locks only the first 4 captures of a step, so shockwaves and blasts do not become untouchable. Glass Cannon cedes less (46-48% start). Compound and Buzzer Beater use longer intervals and smaller boosts. Encore echoes 5 s apart (1.5 s stacked Stampede and hurt Juggernaut).
+- **Splitter's boost accumulates fractional splits** (it spawned at least one per boost, so any boost Mod gave 93-98%).
+- **Core nudges.** Bloom start chance 0.44 to 0.56 and per-capture gain 0.004 to 0.006; Fortress shield wave every 155 captures (was 140).
+- **Bosses.** The Twins are now Pulse with two main runners on both sides (Splitter with a one-sided extra runner won 90%). The Wall: every cell shielded once for both sides, and you start with 47%. Landlord unchanged at 38%.
+- **Rival scaling.** Rivals take no Mods until round 8 and no controller until round 9 (bosses always have one), at most one pick. With a controller from round 3 the lab's random drafter won 17-25%. Ascension tier 2 (controllers from round 1) is therefore a large step.
+- **Lab.** `--cores`, `--mods`, `--levels` for `--mod-impact`; the runs report adds win rate by round and by opponent; the synergy drafter now picks the Mods that measure best on its Core (level 2 vs no Mods, 40 seeds), economy Mods last, instead of guessing from groups.
+
 ## 2026-11-16: Autonomous build-out (Stages A–D)
 
 Yousuf asked for several hours of autonomous work to bring the game to "complete per the planning docs", with decisions made without him and recorded here, and with cheaper agents used for implementation and playtesting. The working plan and interface contracts are in `STAGE_PLAN.md`.
