@@ -82,7 +82,7 @@ You do not need to build anything. Each tagged release includes the zip.
 
 1. Open https://github.com/yousufkamran222-code/turfbreak/releases
 2. Click the latest **Turfbreak v...** release (the one you tagged).
-3. Under **Assets**, download **`turfbreak-crazygames-v0.3.0.zip`** (the version in the name matches your tag).
+3. Under **Assets**, download **`turfbreak-crazygames-v0.5.0.zip`** (the version in the name matches your tag).
 
 Use the **tagged** release zip for submission. The `latest` pre-release also holds a portal zip, but its name has a commit hash, not a version. Use it only to test the newest build.
 
