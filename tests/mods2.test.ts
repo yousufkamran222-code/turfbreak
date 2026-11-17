@@ -59,14 +59,18 @@ describe('new Mods', () => {
     const log: number[] = [];
     const w = world('compound', 2, {}, booster(log));
     run(w, 25);
-    expect(log).toEqual([1.3, 1.3]);
+    expect(log).toEqual([1.15, 1.15]);
   });
 
   it('Echo boosts on every third Core trigger', () => {
     const log: number[] = [];
     const w = world('echo', 3, {}, booster(log));
     for (let i = 0; i < 7; i++) w.contexts[0].triggered();
-    expect(log).toEqual([1.12, 1.12]);
+    // The cooldown (6 s at level 3) holds back the second echo until time has passed.
+    expect(log).toEqual([1.1]);
+    run(w, 7);
+    for (let i = 0; i < 3; i++) w.contexts[0].triggered();
+    expect(log).toEqual([1.1, 1.1]);
   });
 
   it('Hair Trigger lowers trigger thresholds', () => {
@@ -85,9 +89,9 @@ describe('new Mods', () => {
     const w = world('wall-hugger', 3);
     const before = w.counts[0];
     hit(w, w.runners[0]!, 'wall');
-    expect(w.counts[0]).toBe(before + 4);
+    expect(w.counts[0]).toBe(before + 2);
     hit(w, w.runners[0]!, 'clash');
-    expect(w.counts[0]).toBe(before + 4);
+    expect(w.counts[0]).toBe(before + 2);
   });
 
   it('Scorched Trail locks captured cells', () => {
@@ -102,7 +106,7 @@ describe('new Mods', () => {
   it('Ramparts shield interior cells and respect the cap', () => {
     const w = world('ramparts', 1);
     clearRunners(w);
-    run(w, 8.1);
+    run(w, 12.1);
     let shielded = 0;
     for (let i = 0; i < w.owner.length; i++) {
       if (w.owner[i] === 0 && w.cellShield[i]! > 0) {
@@ -110,7 +114,8 @@ describe('new Mods', () => {
         expect(w.cellShield[i]).toBeLessThanOrEqual(1);
       }
     }
-    expect(shielded).toBeGreaterThan(5);
+    expect(shielded).toBeGreaterThan(3);
+    expect(shielded).toBeLessThanOrEqual(5);
   });
 
   it('Encircle flips an enemy cell surrounded by your cells', () => {
@@ -191,17 +196,17 @@ describe('new Mods', () => {
     run(w, 3.9);
     expect(log.length).toBe(0);
     run(w, 7);
-    expect(log.length).toBeGreaterThanOrEqual(6);
-    expect(log.every((f) => f === 1.15)).toBe(true);
+    expect(log.length).toBeGreaterThanOrEqual(4);
+    expect(log.every((f) => f === 1.14)).toBe(true);
   });
 
   it('Front Runner shields frontier cells only while ahead', () => {
     const w = world('front-runner', 1);
     clearRunners(w);
-    run(w, 9.1);
+    run(w, 12.1);
     expect(w.cellShield.some((s) => s > 0)).toBe(false);
     for (let i = 0; i < w.owner.length && w.counts[0] < 110; i++) setOwner(w, i, 0);
-    run(w, 9);
+    run(w, 12);
     let shielded = 0;
     for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === 0 && w.cellShield[i]! > 0) shielded++;
     expect(shielded).toBeGreaterThan(0);
@@ -228,16 +233,16 @@ describe('new Mods', () => {
     expect(Object.keys(modById('scavenger').hooks).length).toBe(0);
   });
 
-  it('Glass Cannon is fast and starts at 40%', () => {
+  it('Glass Cannon is fast and starts at 48%', () => {
     const w = world('glass-cannon', 1);
-    expect(w.counts[0]).toBe(Math.round(w.arena.cellCount * 0.4));
-    expect(statValue(w.sides[0], 'speed')).toBeCloseTo(tuning.runner.speed * 1.2, 6);
+    expect(w.counts[0]).toBe(Math.round(w.arena.cellCount * 0.48));
+    expect(statValue(w.sides[0], 'speed')).toBeCloseTo(tuning.runner.speed * 1.08, 6);
   });
 
   it('Decoy starts extra runners', () => {
     const w = world('decoy', 3);
-    expect(w.sides[0].runnerCount).toBe(4);
-    expect(w.runners.filter((r) => r.side === 0 && !r.primary).length).toBe(3);
+    expect(w.sides[0].runnerCount).toBe(3);
+    expect(w.runners.filter((r) => r.side === 0 && !r.primary).length).toBe(2);
   });
 
   it('Second Wind shields and surges once when you fall under 30%', () => {
@@ -246,7 +251,7 @@ describe('new Mods', () => {
     for (let i = 0; i < n && w.counts[0] > Math.ceil(n * 0.3); i++) setOwner(w, i, 1);
     expect(w.sides[0].shieldSteps).toBe(0);
     w.contexts[1].captureCell(w.owner.findIndex((o) => o === 0));
-    expect(w.sides[0].shieldSteps).toBe(3 * SPS);
+    expect(w.sides[0].shieldSteps).toBe(Math.round(2.2 * SPS));
     expect(w.sides[0].surgeSteps).toBe(3 * SPS);
     w.sides[0].shieldSteps = 0;
     w.contexts[1].captureCell(w.owner.findIndex((o) => o === 0));
@@ -258,12 +263,12 @@ describe('new Mods', () => {
     clearRunners(w);
     expect(applyUltimate(w, 0)).toBe(true);
     expect(w.sides[0].ultimates).toBe(0);
-    run(w, 11.5);
+    run(w, 23.5);
     expect(w.sides[0].ultimates).toBe(0);
     run(w, 1);
     expect(w.sides[0].ultimates).toBe(1);
     applyUltimate(w, 0);
-    run(w, 14);
+    run(w, 26);
     expect(w.sides[0].ultimates).toBe(0);
   });
 
@@ -272,11 +277,11 @@ describe('new Mods', () => {
     clearRunners(w);
     for (let k = 0; k < 2; k++) {
       expect(applyUltimate(w, 0)).toBe(true);
-      run(w, 5.2);
+      run(w, 11.2);
       expect(w.sides[0].ultimates).toBe(1);
     }
     applyUltimate(w, 0);
-    run(w, 7);
+    run(w, 13);
     expect(w.sides[0].ultimates).toBe(0);
   });
 

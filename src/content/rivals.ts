@@ -65,7 +65,7 @@ export interface RivalTier {
 /**
  * Rival strength per round at Ascension 0. Index 0 is round 1. The player has
  * drafted `round` times by the time a round is played (skips aside).
- * Tuned with `npm run lab -- --runs` (docs/balance/stageA-runs.md).
+ * Tuned with `npm run lab -- --runs` (docs/balance/stageA2-runs.md).
  */
 export const rivalScaling: {
   readonly rounds: readonly RivalTier[];
@@ -78,13 +78,13 @@ export const rivalScaling: {
     { picks: 0, levelBonus: 0, controller: false },
     { picks: 0, levelBonus: 0, controller: false },
     { picks: 0, levelBonus: 0, controller: false },
-    { picks: 0, levelBonus: 0, controller: true },
+    { picks: 0, levelBonus: 0, controller: false },
+    { picks: 0, levelBonus: 0, controller: false },
+    { picks: 0, levelBonus: 0, controller: false },
+    { picks: 0, levelBonus: 0, controller: false },
+    { picks: 1, levelBonus: 0, controller: false },
     { picks: 1, levelBonus: 0, controller: true },
     { picks: 1, levelBonus: 0, controller: true },
-    { picks: 1, levelBonus: 0, controller: true },
-    { picks: 2, levelBonus: 0, controller: true },
-    { picks: 2, levelBonus: 0, controller: true },
-    { picks: 3, levelBonus: 0, controller: true },
   ],
   endless: { picksPerRound: 1, levelEvery: 4, extraPrimaryEvery: 5 },
   bossPicks: 0,

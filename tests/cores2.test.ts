@@ -105,15 +105,19 @@ describe('Ricochet and Splitter boosts', () => {
     expect(w.sides[0].stacks).toBeCloseTo(statValue(w.sides[0], 'beamLength'), 9);
   });
 
-  it('Splitter onBoost spawns max(1, floor(splits x (f - 1))) splits', () => {
+  it('Splitter onBoost accumulates floor(max(2, splits) x (f - 1)) splits, carrying the remainder', () => {
     const w = make(splitter);
+    // 2 x 0.2 = 0.4 of a split per boost: none, none, then one.
+    w.contexts[0].boostCore(1.2);
+    w.contexts[0].boostCore(1.2);
+    expect(w.sides[0].runnerCount).toBe(1);
     w.contexts[0].boostCore(1.2);
     expect(w.sides[0].runnerCount).toBe(2);
     const r = primaryOf(w, 0)!;
     for (let i = 0; i < 9; i++) w.contexts[0].spawnRunner(r, { radiusMul: 0.7, speedMul: 0.7 });
     const had = w.sides[0].runnerCount - 1;
     w.contexts[0].boostCore(1.5);
-    expect(w.sides[0].runnerCount - 1).toBe(had + Math.floor(had * 0.5));
+    expect(w.sides[0].runnerCount - 1).toBe(had + Math.floor(had * 0.5 + 0.2));
   });
 });
 

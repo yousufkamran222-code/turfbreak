@@ -42,14 +42,14 @@ describe('Mods', () => {
       recordEvents: true,
     });
     // Head Start's hits fired Ricochet first, then Overclock, on each hit.
-    expect(w.sides[0].hits).toBe(3);
-    expect(w.sides[0].stats.speed.add).toBeCloseTo(3 * 0.01 * tuning.runner.speed, 9);
+    expect(w.sides[0].hits).toBe(2);
+    expect(w.sides[0].stats.speed.add).toBeCloseTo(2 * 0.005 * tuning.runner.speed, 9);
   });
 
   it('Encore repeats the ultimate', () => {
     const w = createWorld({ seed: 1, cores: [splitter, blank], mods: [[{ mod: modById('encore'), level: 2 }], []], pickups: [] });
     applyUltimate(w, 0);
-    for (let i = 0; i < 4 * 60; i++) stepWorld(w);
+    for (let i = 0; i < 11 * 60; i++) stepWorld(w);
     // Three Bursts from a side with no splits: one split each.
     expect(w.sides[0].runnerCount).toBe(4);
   });
