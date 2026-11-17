@@ -304,7 +304,8 @@ Build these as a layer on the event queue, each with an intensity setting and a 
 ### 6.4 Layout
 
 - **Portrait reference:** 390 by 844. From the top: VS header with both build cards and live stack counters, the territory bar with counts and a half marker, the square arena at full width, then the ultimate button.
-- **Desktop and landscape:** the arena is centred and height-limited, with the player's build on the left and the rival's build and a trigger log on the right. Portals require a good desktop presentation.
+- **Desktop and landscape:** at widths of 900 px and up in landscape, the arena is centred and height-limited, with the player's build (Mods with names and effect text) in a left panel and the rival's build plus a live log of the last 8 Core and Mod triggers (icon, name, side colour) in a right panel. Portrait is unchanged. Portals require a good desktop presentation.
+- **Match header:** each side shows its name on one line in small type, with the timer between them as a clock ("0:16") over a small "LEFT" label. The seed shows in the footer only in the Debug quick match and the Versus Lab.
 - **Scaling:** the arena scales to the largest square that fits. Cap device pixel ratio at 2.
 - **Android:** lock to portrait, handle edge-to-edge insets with safe-area padding, handle the back button (back from a match opens pause; back from home exits), and pause when the app is backgrounded.
 - **Touch:** every tap target is at least 44 px. Nothing important sits in the top corners.
@@ -315,7 +316,7 @@ Build these as a layer on the event queue, each with an intensity setting and a 
 | --- | --- |
 | Home | Play or Continue with the last-used Core and an Ascension stepper (tap the Core to change it), Daily Clash, Versus Lab, Collection, Settings, a small Debug entry. One tap from launch to a run |
 | Core select | Unlocked Cores with one-line signature text; locked ones show an unlock hint |
-| VS card | Both names, Cores and Mod icons, round number, hearts |
+| VS card | Both names and Cores, each side's Mods as icon, short name and level (rivals' too; tap one for its full text in a popover, tap elsewhere to close), round number, hearts |
 | Match | As in 6.4, plus pause and the speed toggle |
 | Result and draft | Win or loss banner, one highlight stat, then 3 Mod cards with reroll and skip |
 | Run summary | Rounds won, final build, best moment, share button, play again |
@@ -326,9 +327,9 @@ A Mod card shows the name, a procedural icon, one line of effect text with its n
 
 ### 6.6 Onboarding
 
-- First launch shows one screen: "WHO WINS?" with two Cores to pick from. The pick becomes the player's Core and the match starts.
-- Before the first match, a prompt says "Drag to aim · release to launch". The ultimate button pulses when ready.
-- The first draft carries one line: "Pick a Mod. It stays for the whole run."
+- First launch shows one screen: "WHO WINS?" with two Cores to pick from. The flow is then: pick a Core, the first draft (round 1, with the lines below), the VS card (starts itself after 2 s, or on tap), aim, match. That is about 3 s and 3 taps from load to a launched match.
+- The first draft carries the line "Pick a Mod. It stays for the whole run." and, once only (remembered in the UI prefs), a hint under the buttons: "Reroll: new offers. Skip: take nothing, gain a reroll."
+- Before the first match, a single line under the arena says "Drag to aim · release to launch", with a small ring that drains until the auto-launch. The ultimate button, once ready, is filled in the player's colour, pulses and reads "TAP: <NAME>" with its description; while aiming it reads "Ready after launch", and after use "Used" (or "Ready in Ns" when a Mod will recharge it).
 - Everything else is taught by short contextual hints, one line each, shown once, never blocking play.
 - There is no tutorial mode and no forced reading.
 

@@ -89,10 +89,12 @@ select, input {
 .card.side-1 { text-align: right; }
 .card-name {
   font-weight: 900;
-  font-size: 15px;
-  line-height: 1.1;
-  letter-spacing: 0.05em;
-  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .card-stack { display: inline-flex; gap: 6px; align-items: baseline; border-radius: 8px; padding: 2px 6px; margin: 2px -6px 0; }
 .stack-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
@@ -103,12 +105,18 @@ select, input {
   to { background: transparent; }
 }
 .timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  font-size: 26px;
-  min-width: 56px;
+  min-width: 64px;
   text-align: center;
+  line-height: 1;
 }
+.timer .time { font-size: 30px; }
+.timer .left-label { font-size: 9px; letter-spacing: 0.2em; color: var(--muted); margin-top: 2px; }
+.timer.word .time { font-size: 14px; letter-spacing: 0.08em; }
 .timer.urgent { color: #ffd23d; }
 
 .bar {
@@ -181,7 +189,7 @@ select, input {
   animation: pulse 1s ease-in-out infinite;
 }
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
+  0%, 100% { opacity: 1; filter: none; }
   50% { opacity: 0.55; transform: scale(0.96); }
 }
 .result-name { font-weight: 800; letter-spacing: 0.06em; color: var(--muted); }
@@ -193,7 +201,6 @@ select, input {
 
 .match-title { text-align: center; font-size: 12px; font-weight: 900; letter-spacing: 0.16em; color: var(--muted); }
 .section { margin: 18px 0 0; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-.aim-left { display: block; font-size: 15px; color: var(--muted); }
 .muted { color: var(--muted); }
 
 .mod-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
@@ -227,16 +234,38 @@ select, input {
   border: 2px solid #2a3040;
 }
 .ultimate .ult-name { font-size: 18px; font-weight: 900; letter-spacing: 0.14em; }
-.ultimate .ult-desc { font-size: 11px; font-weight: 600; letter-spacing: 0; }
+.ultimate .ult-desc { font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.ultimate:disabled { opacity: 1; }
+.ultimate.pending { color: var(--text); border-color: var(--side-a); border-style: dashed; }
+.ultimate.spent { opacity: 0.6; }
 .ultimate.ready {
   background: var(--side-a);
   color: #fff;
   border-color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
   animation: ready 1.1s ease-in-out infinite;
 }
+.ultimate.ready .ult-name { font-size: 20px; }
+.ultimate.ready .ult-desc { font-weight: 700; }
+.aim-row {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.aim-ring { width: 22px; height: 22px; transform: rotate(-90deg); flex: none; }
+.aim-ring circle { fill: none; stroke-width: 3; }
+.aim-ring .track { stroke: #2a3040; }
+.aim-ring .fill { stroke: var(--side-a); stroke-dasharray: 56.55; stroke-dashoffset: 0; animation: drain linear forwards; }
+@keyframes drain { to { stroke-dashoffset: 56.55; } }
 @keyframes ready {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.5); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55); filter: none; }
+  50% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); filter: brightness(1.18); }
 }
 .ult-banner {
   position: absolute;
@@ -244,16 +273,17 @@ select, input {
   right: 0;
   top: 38%;
   text-align: center;
-  font-size: 26px;
+  font-size: 22px;
+  padding: 0 8px;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   pointer-events: none;
   text-shadow: 0 3px 14px rgba(0, 0, 0, 0.95);
   animation: banner 1.2s ease-out forwards;
 }
 @keyframes banner {
   0% { opacity: 0; transform: scale(2); }
-  15% { opacity: 1; transform: scale(1); }
+  15% { opacity: 1; filter: none; }
   75% { opacity: 1; }
   100% { opacity: 0; transform: translateY(-30px); }
 }
@@ -609,3 +639,101 @@ button.daily, .daily.done {
 .result .export { gap: 8px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
 .result .export button { flex: 1 1 0; padding: 0 8px; font-size: 13px; white-space: nowrap; }
 .flash-note { font-size: 12px; font-weight: 800; color: var(--good); letter-spacing: 0.06em; min-height: 16px; }
+
+/* ---- Playtest round 1 fixes -------------------------------------------------------------- */
+.draft-hint { margin: -4px 0 0; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* VS card Mod list: icon, short name, level; two columns when there is room. */
+.mod-list { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; }
+.screen.vs .vs-side { width: 100%; }
+.mod-list.none { text-align: center; color: var(--muted); font-size: 13px; }
+.mod-line {
+  min-height: 44px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 2px solid #3a4256;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-align: left;
+  min-width: 0;
+}
+.mod-line.uncommon { border-color: var(--uncommon); }
+.mod-line.rare { border-color: var(--rare); }
+.mod-line.on { background: #1d2436; }
+.mod-line .g { flex: none; width: 20px; text-align: center; font-size: 17px; }
+.mod-line .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-line .l { flex: none; font-weight: 900; color: var(--good); }
+.mod-pop {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  /* Over the gap between the two cards (player) or the space below (rival), never over the tapped list. */
+  top: calc(100% + 6px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #1d2436;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  text-align: left;
+  font-size: 14px;
+}
+
+/* Desktop and landscape side panels (6.4). Hidden in portrait. */
+.match-wrap { height: 100%; }
+.side-panel { display: none; }
+@media (min-width: 900px) and (orientation: landscape) {
+  .match-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(480px, calc(100dvh - 190px), 900px) minmax(0, 1fr);
+    gap: 28px;
+    padding: 10px 28px;
+    max-width: 1900px;
+    margin: 0 auto;
+  }
+  .match-wrap > .match { max-width: none; margin: 0; width: 100%; padding: 0; min-height: 0; }
+  .hud .mod-row { display: none; }
+  .card-name { font-size: 14px; }
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 16px;
+    margin: 10px 0;
+    background: var(--panel);
+    border: 2px solid var(--c);
+    border-radius: 18px;
+    align-self: start;
+    max-height: calc(100% - 20px);
+  }
+  .sp-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.18em; color: var(--muted); }
+  .sp-name { font-size: 24px; font-weight: 900; letter-spacing: 0.05em; line-height: 1.1; }
+  .sp-sig { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .sp-sig b { color: var(--text); font-size: 16px; }
+  .sp-none { margin: 0; color: var(--muted); font-size: 13px; }
+  .sp-mods, .sp-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .sp-mods li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border: 2px solid #3a4256; border-radius: 10px; background: var(--bg); }
+  .sp-mods li.uncommon { border-color: var(--uncommon); }
+  .sp-mods li.rare { border-color: var(--rare); }
+  .sp-mods .g { font-size: 20px; width: 24px; text-align: center; flex: none; }
+  .sp-mod-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .sp-mod-text b { font-size: 14px; }
+  .sp-mod-text small { font-size: 12px; color: var(--muted); }
+  .sp-log li { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; min-height: 22px; }
+  .sp-log li.none { color: var(--muted); font-weight: 500; }
+  .sp-log .g { width: 20px; text-align: center; flex: none; font-size: 16px; }
+  .sp-log li.side-0 .g { color: var(--side-a); }
+  .sp-log li.side-1 .g { color: var(--side-b); }
+  .side-panel h3 { margin-top: 8px; }
+}

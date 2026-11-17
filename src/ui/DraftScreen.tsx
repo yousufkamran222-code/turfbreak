@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { rulesFor } from '../content/ascension';
 import { mods } from '../content/mods';
 import { MAX_MODS, type RunState } from '../run/run';
@@ -12,6 +12,9 @@ interface Props {
   onReroll(): void;
   onReplace(modId: string, slot: number): void;
   onHome(): void;
+  /** The one-line hint under the buttons was already shown on an earlier draft. */
+  hintSeen?: boolean;
+  onHintSeen?(): void;
 }
 
 export function roundLabel(run: RunState): string {
@@ -28,7 +31,12 @@ function lastResult(run: RunState): string | null {
 }
 
 /** Pick 1 of the offered Mods, reroll, skip, or (with a full build) choose which Mod to replace. */
-export function DraftScreen({ run, onPick, onReroll, onReplace, onHome }: Props) {
+export function DraftScreen({ run, onPick, onReroll, onReplace, onHome, hintSeen = true, onHintSeen }: Props) {
+  // Shown for the whole first draft (rerolls included), then never again.
+  const [showHint] = useState(!hintSeen);
+  useEffect(() => {
+    if (showHint) onHintSeen?.();
+  }, []);
   const [replacing, setReplacing] = useState<ModDef | null>(null);
   useBack(() => {
     if (replacing) setReplacing(null);
@@ -96,9 +104,10 @@ export function DraftScreen({ run, onPick, onReroll, onReplace, onHome }: Props)
           Reroll ({run.rerolls})
         </button>
         <button type="button" class="secondary" id="skip" onClick={() => onPick(null)}>
-          Skip +{rules.skipRerolls} reroll
+          Skip (+{rules.skipRerolls} reroll{rules.skipRerolls === 1 ? '' : 's'})
         </button>
       </div>
+      {showHint && <p class="draft-hint">Reroll: new offers. Skip: take nothing, gain a reroll.</p>}
 
       <section class="build-panel" aria-label="Your build">
         <span class="muted">Your build {run.build.length}/{MAX_MODS}</span>

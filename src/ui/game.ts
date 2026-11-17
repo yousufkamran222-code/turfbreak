@@ -16,6 +16,8 @@ const PREFS_KEY = 'turfbreak.ui';
 export interface Prefs {
   coreId: string;
   ascension: number;
+  /** The one-line draft hint has been shown once. */
+  draftHintSeen?: boolean;
 }
 
 export interface MatchOutcome {
@@ -76,7 +78,7 @@ export class Game {
         const d = doc as Record<string, unknown>;
         const coreId = typeof d.coreId === 'string' ? d.coreId : this.prefs.value.coreId;
         const ascension = typeof d.ascension === 'number' && Number.isFinite(d.ascension) ? Math.floor(d.ascension) : 0;
-        this.setPrefs({ coreId, ascension }, false);
+        this.setPrefs({ coreId, ascension, draftHintSeen: d.draftHintSeen === true }, false);
       }
     } catch {
       // Corrupt preferences fall back to the defaults.
@@ -90,8 +92,15 @@ export class Game {
     const open = unlockedCores(s);
     const coreId = open.includes(p.coreId) ? p.coreId : (open[0] ?? p.coreId);
     const ascension = Math.max(0, Math.min(maxTier(s, coreId), Math.floor(p.ascension)));
-    this.prefs.value = { coreId, ascension };
+    const seen = p.draftHintSeen ?? this.prefs.value.draftHintSeen ?? false;
+    this.prefs.value = seen ? { coreId, ascension, draftHintSeen: true } : { coreId, ascension };
     if (persist) void this.platform.storageSet(PREFS_KEY, JSON.stringify(this.prefs.value));
+  }
+
+  /** Remember that the first-draft hint was shown, so it never shows again. */
+  markDraftHintSeen(): void {
+    if (this.prefs.value.draftHintSeen) return;
+    this.setPrefs({ ...this.prefs.value, draftHintSeen: true });
   }
 
   get settings(): Settings {

@@ -15,18 +15,24 @@ export class FixedStepper {
 
   /**
    * Advance by a real elapsed time, calling `step` a whole number of times.
+   * `step` may return `false` to stop for this frame (a hit-stop began): the
+   * step it refused is not consumed, so no sim time is lost at 2x or 4x.
    * Returns the interpolation factor in [0, 1) between the last two states.
    */
-  advance(elapsedSeconds: number, speed: number, step: () => void): number {
+  advance(elapsedSeconds: number, speed: number, step: () => unknown): number {
     this.accumulator += Math.max(0, elapsedSeconds) * speed;
     let steps = 0;
+    let refused = false;
     while (this.accumulator >= this.dt && steps < this.maxStepsPerFrame * speed) {
-      step();
+      if (step() === false) {
+        refused = true;
+        break;
+      }
       this.accumulator -= this.dt;
       steps++;
     }
     // After a long stall (tab hidden, debugger), drop the backlog instead of fast-forwarding.
-    if (this.accumulator >= this.dt) this.accumulator = 0;
+    if (!refused && this.accumulator >= this.dt) this.accumulator = 0;
     return this.accumulator / this.dt;
   }
 

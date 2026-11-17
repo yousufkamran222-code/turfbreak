@@ -62,6 +62,8 @@ export function RunFlow({ game, onHome }: { game: Game; onHome(): void }) {
         onReroll={() => game.reroll()}
         onReplace={(id, slot) => game.replace(id, slot)}
         onHome={onHome}
+        hintSeen={game.prefs.value.draftHintSeen === true}
+        onHintSeen={() => game.markDraftHintSeen()}
       />
     );
   }

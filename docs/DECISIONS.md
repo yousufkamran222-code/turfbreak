@@ -2,6 +2,19 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Playtest round 1 fixes
+
+- **Stuck 2x match: not reproduced.** Playwright runs (2x toggled during aiming, 3 s into the match, 40 rapid toggles, and during the ultimate slow-motion) all counted the timer down and ended the match. One latent bug was real and fixed: when a hit-stop began part-way through a frame at 2x or 4x, the frame's remaining steps were consumed without running, and the stepper was reset during hit-stop, so sim time was lost. `FixedStepper.advance` now lets the callback return `false` to stop the frame without consuming the step, and the session no longer resets the stepper during hit-stop. Unit tests added. Most likely the original stall was the driver (a pulsing `transform` also made the ultimate button "unstable" for Playwright clicks, so the ready pulse now uses only shadow and brightness).
+- **VS card shows Mods by name.** Each Mod is a 44 px row: glyph, short name, level, two columns when there is room, for both sides. Tapping one opens a popover with its full text on that side's card; the 2 s auto-start waits while it is open, and a tap anywhere closes it (instead of starting the match).
+- **Draft hint once.** `draftHintSeen` lives in the existing `turfbreak.ui` prefs key and is kept through Core changes. The skip button reads "Skip (+1 reroll)".
+- **Seed hidden in matches** except the Debug quick match and the Versus Lab (`showSeed`).
+- **Ultimate button states:** ready (filled in the player's colour, pulsing, "TAP: NAME" with description), aiming (dashed outline in the player's colour, "Ready after launch", full-contrast text), used ("Used", or "Ready in Ns" when the player has Quick Hands; the count is display-only, mirrored from the Mod's numbers; pickup recharges are not predicted).
+- **Aim hint** is a one-line row between the arena and the ultimate button, with a draining ring for the auto-launch instead of a digit. The row keeps its height after launch so the arena does not resize.
+- **Top HUD:** names on one line at 12 px; timer is a clock with a "LEFT" label ("AIM", "SUDDEN DEATH" and "FINAL" stay words).
+- **Magnet glyph** is now "∩" (a horseshoe, flat like the others), replacing the colour emoji.
+- **Desktop layout** (6.4) built as described in the brief: panels appear at 900 px and up in landscape; the in-header Mod chips are hidden there as the left panel lists them. The trigger log comes from the session's `CoreTriggered` and `ModTriggered` events (`hud.log`, last 8, Core triggers use a "◈" icon).
+- **6.6 rewritten** to the real first-launch flow (Core, first draft with hint, VS card, aim, match; about 3 s and 3 taps).
+
 ## 2026-11-17: Ascension reordered
 
 - **Old order:** rival AI from round 1 at tier 2, and 2 hearts at tier 6. That made a cliff at tier 2 (synergy run win rate 71% → 43%), and tier 8 at about 3%.

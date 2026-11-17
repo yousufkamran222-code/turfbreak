@@ -143,7 +143,7 @@ export const mods: readonly ModDef[] = [
   {
     id: 'magnet',
     name: 'Magnet',
-    glyph: '🧲',
+    glyph: '∩',
     rarity: 'common',
     group: 'Pickup',
     text: (l) => `Your runners grab pickups from ${at(l, [2, 2.5, 3])}× as far away.`,

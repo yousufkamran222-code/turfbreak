@@ -197,6 +197,7 @@ function Screens({ game }: Props) {
           haptic: (k) => game.haptic(k),
         }}
         title="VERSUS LAB"
+        showSeed
         neutral
         speeds={[1, 2, 4]}
         skip
@@ -266,6 +267,7 @@ function Screens({ game }: Props) {
             },
           },
         ]}
+        showSeed
         quitLabel="Back to debug"
         onQuit={() => setScreen('debug')}
       />
