@@ -15,6 +15,13 @@ Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, ol
 - **Dev-only preview:** `npm run dev` with `?fakeads` fakes rewarded ads (`withDevFakeAds`, gated on `import.meta.env.DEV`, absent from builds).
 - **CI UI smoke:** `node tools/ui-smoke.mjs --fast` plays one match (first launch, draft, VS card, aim, 2x speed with big clock slices), checks the next draft, Settings and Collection, and fails on any console error. About 10 s locally, so it runs as a normal CI step after the size check, with Chromium installed by `npx playwright install chromium --with-deps` and screenshots uploaded as `ui-smoke-screenshots`. `playwright` is now a pinned devDependency (1.65.1). The full smoke stays manual.
 
+## 2026-11-17: Playtest round 2 fixes
+
+- **Home cards no longer clip.** `.screen` is a full-height flex column, so its children shrank to fit and cut off text (the Core card title, the Daily Clash subtitle). Children now keep their natural height, and the screen scrolls.
+- **The Daily Clash may hand you a locked Core, on purpose.** It is the same for everyone that day and doubles as a free try. The card says so when the Core is locked.
+- **A reload during a match restarts that match** from its VS card. This is intended: a half-played match cannot be stored mid-step without growing the save, and the draft state is kept exactly.
+- **The VS card "hang"** happened only under the playtest agent's fake clock. The real-time smoke and the CI smoke both pass through the VS card into the arena.
+
 ## 2026-11-17: Playtest round 1 fixes
 
 - **Stuck 2x match: not reproduced.** Playwright runs (2x toggled during aiming, 3 s into the match, 40 rapid toggles, and during the ultimate slow-motion) all counted the timer down and ended the match. One latent bug was real and fixed: when a hit-stop began part-way through a frame at 2x or 4x, the frame's remaining steps were consumed without running, and the stepper was reset during hit-stop, so sim time was lost. `FixedStepper.advance` now lets the callback return `false` to stop the frame without consuming the step, and the session no longer resets the stepper during hit-stop. Unit tests added. Most likely the original stall was the driver (a pulsing `transform` also made the ultimate button "unstable" for Playwright clicks, so the ready pulse now uses only shadow and brightness).

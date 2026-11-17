@@ -2,7 +2,7 @@
 
 ## Autonomous build-out, Stages A–D (16–17 Nov 2026)
 
-**Status: feature-complete against the brief's Phases 3–7, pending Yousuf's own play test.** Yousuf asked for several hours of autonomous work. The plan and agent contracts are in `STAGE_PLAN.md`; every design call is in `DECISIONS.md` (sections dated 16 and 17 Nov). Agents (Sonnet and Haiku, a few on Opus early on) built in parallel git worktrees. I merged, verified and tuned.
+**Status (v0.6): feature-complete against the brief's Phases 3–7, pending Yousuf's own play test.** Yousuf asked for several hours of autonomous work. The plan and agent contracts are in `STAGE_PLAN.md`; every design call is in `DECISIONS.md` (sections dated 16 and 17 Nov). Agents (Sonnet and Haiku, a few on Opus early on) built in parallel git worktrees. I merged, verified and tuned.
 
 ### What the game has now
 - **Content:**
@@ -50,6 +50,8 @@
   - resume after a reload, pause, settings persisting, a corrupt save
   - Collection, Daily, Versus Lab, replay links
   - Round 1's findings (unnamed Mods on the VS card, unclear reroll and skip, a debug seed showing, a weak ultimate-ready state, the aim hint overlapping the arena) were fixed. A latent bug where hit-stop dropped sim time at 2x/4x was also fixed.
+  - Round 2 (settings, Collection, Daily, pause, reload, Versus Lab) found Home cards clipping their text, now fixed. It also flagged the Daily Clash offering a locked Core, which is kept on purpose and now explained on the card.
+- **CI** runs a fast UI smoke test on every push (about 10 s): first launch to the next draft, Settings and Collection, failing on any console error.
 
 ### Known gaps
 - **Fun is unconfirmed.** Agents can find bugs and confusion, not fun. Yousuf's last verdict (on the redirect build) was "not fun". This build has not been played by him.

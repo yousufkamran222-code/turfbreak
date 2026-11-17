@@ -74,7 +74,10 @@ function DailyCard({ game, onStart, onResume }: { game: Game; onStart(): void; o
         <b>DAILY CLASH</b>
         <span>{inProgress ? 'Continue today\'s run' : `Today: ${core ? coreName(core) : '?'}`}{streakText}</span>
       </span>
-      <small>One seeded run a day, the same for everyone. One scored attempt.</small>
+      <small>
+        One seeded run a day, the same for everyone. One scored attempt.
+        {!inProgress && core && !save.unlocks.cores.includes(core.id) ? ' A free try of a Core you have not unlocked yet.' : ''}
+      </small>
     </button>
   );
 }

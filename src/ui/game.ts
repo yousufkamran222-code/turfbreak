@@ -1,3 +1,4 @@
+import { track } from '../meta/analytics';
 import { signal } from '@preact/signals';
 import type { Synth } from '../audio/synth';
 import { cores } from '../content/cores';
@@ -147,6 +148,7 @@ export class Game {
     this.unlocked.value = null;
     this.setPrefs({ coreId, ascension: tier });
     this.setRun(run, this.countRun(s.stats, coreId));
+    track('run_start', { core: coreId, ascension: tier, mode: 'standard' });
   }
 
   private countRun(stats: Save['stats'], coreId: string): Save['stats'] {
@@ -165,6 +167,7 @@ export class Game {
     this.unlocked.value = null;
     this.newFeats.value = [];
     this.commit({ ...s, run, daily: { day, result: null }, stats: this.countRun(s.stats, coreId) });
+    track('run_start', { core: coreId, ascension: 0, mode: 'daily' });
   }
 
   pick(modId: string | null): void {
@@ -184,6 +187,7 @@ export class Game {
 
   /** Record a match: run state, stats, records, feats and, on a first win at a tier, the next Ascension. */
   finish(o: MatchOutcome): void {
+    track('match_end', { won: o.winner === 0, margin: o.margin, round: this.save.value.run?.round ?? 0 });
     const done = applyMatch(this.save.value, o);
     if (done.save === this.save.value) return;
     if (done.ascension !== null) this.unlocked.value = done.ascension;
