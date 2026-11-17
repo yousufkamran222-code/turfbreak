@@ -1,28 +1,30 @@
-import { useMemo, useState } from 'preact/hooks';
-import { Synth } from '../audio/synth';
+import { useEffect, useState } from 'preact/hooks';
 import { coreById } from '../content/cores';
 import { tuning } from '../content/tuning';
-import type { Platform } from '../platform';
 import type { ControllerSpec } from '../sim/input';
-import { Gauntlet } from './Gauntlet';
+import { handleBack } from './back';
+import type { Game } from './game';
+import { CoreSelectScreen, FirstScreen, HomeScreen, SettingsScreen } from './MenuScreens';
 import { MatchScreen } from './MatchScreen';
+import { RunFlow } from './RunFlow';
 import { SetupScreen, type SetupChoice } from './SetupScreen';
 
 interface Props {
-  platform: Platform;
-  launches: number;
+  game: Game;
 }
 
 function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
 
-type Screen = 'menu' | 'gauntlet' | 'quick';
+type Screen = 'home' | 'run' | 'cores' | 'settings' | 'debug' | 'quick';
 
-/** Phase 2 shell: menu, the mini-draft Gauntlet, and a debug quick match. */
-export function App({ platform, launches }: Props) {
-  const synth = useMemo(() => new Synth(), []);
-  const [screen, setScreen] = useState<Screen>('menu');
+/** The shell: first-launch pick, home, the run, settings and the debug quick match. */
+export function App({ game }: Props) {
+  const { platform, synth } = game;
+  const save = game.save.value;
+  const firstLaunch = save.stats.runsStarted === 0 && save.run === null;
+  const [screen, setScreen] = useState<Screen>('home');
   const [choice, setChoice] = useState<SetupChoice>({
     coreA: 'ricochet',
     coreB: 'splitter',
@@ -30,16 +32,35 @@ export function App({ platform, launches }: Props) {
     rivalAi: true,
     assist: false,
   });
-  // Every match gets a fresh key, so Rematch remounts even with the same seed.
+  // Every quick match gets a fresh key, so Rematch remounts even with the same seed.
   const [matchId, setMatchId] = useState(0);
   const [muted, setMuted] = useState(false);
-  const toggleMute = (): void => {
-    synth.setMuted(!muted);
-    setMuted(!muted);
-  };
 
-  if (screen === 'gauntlet') {
-    return <Gauntlet platform={platform} synth={synth} muted={muted} onToggleMute={toggleMute} onExit={() => setScreen('menu')} />;
+  // One platform back listener; screens register what back means for them (see back.ts).
+  useEffect(() => platform.onBack(handleBack), [platform]);
+
+  const home = (): void => setScreen('home');
+
+  // A run in progress is always shown as the run, whatever else was open (first run included).
+  if (screen === 'run' && save.run) return <RunFlow game={game} onHome={home} />;
+  if (screen === 'settings') return <SettingsScreen game={game} onDone={home} />;
+  if (screen === 'cores') return <CoreSelectScreen game={game} onDone={home} />;
+
+  if (screen === 'debug') {
+    return (
+      <SetupScreen
+        initial={choice}
+        platformId={platform.id}
+        launches={save.launches}
+        onBack={home}
+        onQuick={(c) => {
+          synth.unlock();
+          setChoice(c);
+          setMatchId((n) => n + 1);
+          setScreen('quick');
+        }}
+      />
+    );
   }
 
   if (screen === 'quick') {
@@ -51,12 +72,18 @@ export function App({ platform, launches }: Props) {
         platform={platform}
         synth={synth}
         muted={muted}
-        onToggleMute={toggleMute}
-        seed={choice.seed}
-        cores={[coreById(choice.coreA), coreById(choice.coreB)]}
-        mods={[[], []]}
-        rival={rival}
-        assist={assist}
+        onToggleMute={() => {
+          synth.setMuted(!muted);
+          setMuted(!muted);
+        }}
+        config={{
+          seed: choice.seed,
+          cores: [coreById(choice.coreA), coreById(choice.coreB)],
+          mods: [[], []],
+          rival,
+          assist,
+          haptic: (k) => game.haptic(k),
+        }}
         actions={[
           { label: 'Rematch', run: () => setMatchId((n) => n + 1) },
           {
@@ -67,26 +94,21 @@ export function App({ platform, launches }: Props) {
             },
           },
         ]}
-        onBack={() => setScreen('menu')}
+        quitLabel="Back to debug"
+        onQuit={() => setScreen('debug')}
       />
     );
   }
 
+  if (firstLaunch) return <FirstScreen game={game} onRun={() => setScreen('run')} onSettings={() => setScreen('settings')} />;
+
   return (
-    <SetupScreen
-      initial={choice}
-      platformId={platform.id}
-      launches={launches}
-      onGauntlet={() => {
-        synth.unlock();
-        setScreen('gauntlet');
-      }}
-      onQuick={(c) => {
-        synth.unlock();
-        setChoice(c);
-        setMatchId((n) => n + 1);
-        setScreen('quick');
-      }}
+    <HomeScreen
+      game={game}
+      onRun={() => setScreen('run')}
+      onChangeCore={() => setScreen('cores')}
+      onSettings={() => setScreen('settings')}
+      onDebug={() => setScreen('debug')}
     />
   );
 }

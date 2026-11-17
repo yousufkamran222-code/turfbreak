@@ -313,7 +313,7 @@ Build these as a layer on the event queue, each with an intensity setting and a 
 
 | Screen | Contents |
 | --- | --- |
-| Home | Play, Daily Clash, Versus Lab, Collection, Settings. One tap from launch to a run |
+| Home | Play or Continue with the last-used Core and an Ascension stepper (tap the Core to change it), Daily Clash, Versus Lab, Collection, Settings, a small Debug entry. One tap from launch to a run |
 | Core select | Unlocked Cores with one-line signature text; locked ones show an unlock hint |
 | VS card | Both names, Cores and Mod icons, round number, hearts |
 | Match | As in 6.4, plus pause and the speed toggle |

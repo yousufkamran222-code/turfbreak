@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Synth } from '../audio/synth';
 import type { Platform } from '../platform';
-import type { CoreDef, ModPick } from '../sim/abilities';
 import type { EndReason } from '../sim/events';
-import type { ControllerSpec } from '../sim/input';
 import type { SideIndex } from '../sim/world';
+import { useBack } from './back';
+import type { MatchOutcome } from './game';
 import { Hud as HudView } from './Hud';
-import { MatchSession } from './session';
+import { MatchSession, type SessionConfig } from './session';
 import { sideLook } from './sides';
 
 interface Props {
@@ -14,16 +14,17 @@ interface Props {
   synth: Synth;
   muted: boolean;
   onToggleMute(): void;
-  seed: number;
-  cores: readonly [CoreDef, CoreDef];
-  mods: readonly [readonly ModPick[], readonly ModPick[]];
-  rival: ControllerSpec | null;
-  assist: ControllerSpec | null;
-  /** Shown above the arena, e.g. "ROUND 3 OF 5". */
+  /** The match to play: seed, Cores, Mods, controllers and any boss twist. */
+  config: SessionConfig;
+  /** Shown above the arena, e.g. "ROUND 3 / 10". */
   title?: string;
   /** Result buttons: label and action. The first is the primary action. */
-  actions: readonly { label: string; run(winner: SideIndex): void }[];
-  onBack(): void;
+  actions: readonly { label: string; run(outcome: MatchOutcome): void }[];
+  /** A line under the result, e.g. the heart lost. */
+  note?: (winner: SideIndex) => string;
+  /** Leave the match from the pause overlay (the second button). */
+  quitLabel?: string;
+  onQuit(): void;
 }
 
 const reasonText: Record<EndReason, string> = {
@@ -33,7 +34,22 @@ const reasonText: Record<EndReason, string> = {
 };
 
 export function MatchScreen(props: Props) {
-  const { platform, synth, seed, cores, mods, rival, assist, actions, onBack } = props;
+  const { platform, synth, config, actions } = props;
+  const { seed, cores, mods, assist } = config;
+  const [paused, setPausedState] = useState(false);
+  const pausedRef = useRef(false);
+  const sessionRef = useRef<MatchSession | null>(null);
+  const setPause = (p: boolean): void => {
+    pausedRef.current = p;
+    setPausedState(p);
+    sessionRef.current?.setPaused(p);
+    if (p) platform.gameplayStop();
+    else platform.gameplayStart();
+  };
+  useBack(() => {
+    setPause(!pausedRef.current);
+    return true;
+  });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [session, setSession] = useState<MatchSession | null>(null);
@@ -42,7 +58,8 @@ export function MatchScreen(props: Props) {
     const canvas = canvasRef.current;
     const box = boxRef.current;
     if (!canvas || !box) return;
-    const s = new MatchSession(canvas, { seed, cores, mods, rival, assist }, synth);
+    const s = new MatchSession(canvas, config, synth);
+    sessionRef.current = s;
     setSession(s);
     const fit = (): void => s.resize(Math.floor(Math.min(box.clientWidth, box.clientHeight)));
     const ro = new ResizeObserver(fit);
@@ -78,11 +95,9 @@ export function MatchScreen(props: Props) {
 
     s.start();
     platform.gameplayStart();
-    const offPause = platform.onPause(() => s.setPaused(true));
-    const offResume = platform.onResume(() => s.setPaused(false));
-    const offBack = platform.onBack(() => {
-      onBack();
-      return true;
+    // Backgrounding opens the pause overlay; the player resumes from it.
+    const offPause = platform.onPause(() => {
+      if (!pausedRef.current) setPause(true);
     });
     return () => {
       s.stop();
@@ -92,8 +107,7 @@ export function MatchScreen(props: Props) {
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       offPause();
-      offResume();
-      offBack();
+      sessionRef.current = null;
       platform.gameplayStop();
     };
     // The session is rebuilt by remounting: every match gets a fresh key.
@@ -133,9 +147,21 @@ export function MatchScreen(props: Props) {
             <div class="result-sub">
               {reasonText[reason]} · {hud?.counts[0].value} to {hud?.counts[1].value} · {hud?.leadChanges.value} lead changes
             </div>
+            {props.note && <div class="result-note">{props.note(winner as SideIndex)}</div>}
             <div class="row">
               {actions.map((a, i) => (
-                <button key={a.label} type="button" class={i === 0 ? 'primary' : 'secondary'} onClick={() => a.run(winner)}>
+                <button
+                  key={a.label}
+                  type="button"
+                  class={i === 0 ? 'primary' : 'secondary'}
+                  onClick={() =>
+                    a.run({
+                      winner: winner as SideIndex,
+                      margin: Math.abs((hud?.counts[0].value ?? 0) - (hud?.counts[1].value ?? 0)),
+                      wipeout: reason === 'wipeout',
+                    })
+                  }
+                >
                   {a.label}
                 </button>
               ))}
@@ -155,19 +181,32 @@ export function MatchScreen(props: Props) {
         </button>
       )}
       <footer class="match-footer">
-        <button type="button" class="secondary small" onClick={onBack}>
-          Back
+        <button type="button" class="secondary small" id="pause" onClick={() => setPause(true)}>
+          Pause
         </button>
         <span class="seed">seed {seed}</span>
         <div class="row">
           <button type="button" class="secondary small" onClick={props.onToggleMute} aria-label="Toggle sound">
-            {props.muted ? 'Sound off' : 'Sound on'}
+            {props.muted ? 'Muted' : 'Sound'}
           </button>
           <button type="button" class="secondary small" onClick={() => session?.toggleSpeed()}>
             {hud?.speed.value ?? 1}x
           </button>
         </div>
       </footer>
+      {paused && (
+        <div class="overlay" role="dialog" aria-label="Paused">
+          <div class="sheet">
+            <h3>PAUSED</h3>
+            <button type="button" class="primary" id="resume" onClick={() => setPause(false)}>
+              Resume
+            </button>
+            <button type="button" class="secondary" id="quit" onClick={props.onQuit}>
+              {props.quitLabel ?? 'Quit match'}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

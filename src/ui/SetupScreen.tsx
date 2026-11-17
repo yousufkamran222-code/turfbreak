@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { cores } from '../content/cores';
+import { useBack } from './back';
 
 export interface SetupChoice {
   coreA: string;
@@ -13,12 +14,16 @@ interface Props {
   initial: SetupChoice;
   platformId: string;
   launches: number;
-  onGauntlet(): void;
+  onBack(): void;
   onQuick(choice: SetupChoice): void;
 }
 
-/** Menu: the mini-draft Gauntlet, or a debug quick match with two Cores and a seed. */
-export function SetupScreen({ initial, platformId, launches, onGauntlet, onQuick }: Props) {
+/** Debug: a quick match with any two Cores and a seed. Reached from Home, never on the main path. */
+export function SetupScreen({ initial, platformId, launches, onBack, onQuick }: Props) {
+  useBack(() => {
+    onBack();
+    return true;
+  });
   const [coreA, setCoreA] = useState(initial.coreA);
   const [coreB, setCoreB] = useState(initial.coreB);
   const [seed, setSeed] = useState(String(initial.seed));
@@ -47,11 +52,7 @@ export function SetupScreen({ initial, platformId, launches, onGauntlet, onQuick
       <h1>
         TURFBREAK <span class="tag">debug</span>
       </h1>
-      <p class="lede">Build a side. Watch it fight.</p>
-      <button type="button" class="primary" onClick={onGauntlet}>
-        Play the Gauntlet
-      </button>
-      <h3 class="section">Quick match (debug)</h3>
+      <h3 class="section">Quick match</h3>
       {corePicker('Side A (you)', coreA, setCoreA)}
       {corePicker('Side B (rival)', coreB, setCoreB)}
       <div class="toggles">
@@ -80,6 +81,9 @@ export function SetupScreen({ initial, platformId, launches, onGauntlet, onQuick
         onClick={() => onQuick({ coreA, coreB, seed: seedNum, rivalAi, assist })}
       >
         Quick match
+      </button>
+      <button type="button" class="secondary" onClick={onBack}>
+        Back
       </button>
       <footer class="build">
         v{__APP_VERSION__} · {__APP_COMMIT__} · {platformId} · launch {launches}

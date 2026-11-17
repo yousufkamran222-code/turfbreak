@@ -16,6 +16,10 @@ const midiToHz = (m: number): number => 440 * 2 ** ((m - 69) / 12);
 export class Synth {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private sfx: GainNode | null = null;
+  private music: GainNode | null = null;
+  private musicVolume = 1;
+  private sfxVolume = 1;
   private muted = false;
   private readonly hitIndex = [0, 0];
   private readonly lastHit = [-Infinity, -Infinity];
@@ -36,6 +40,12 @@ export class Synth {
         this.master = this.ctx.createGain();
         this.master.gain.value = this.muted ? 0 : tuning.audio.masterVolume;
         this.master.connect(this.ctx.destination);
+        this.sfx = this.ctx.createGain();
+        this.sfx.gain.value = this.sfxVolume;
+        this.sfx.connect(this.master);
+        this.music = this.ctx.createGain();
+        this.music.gain.value = this.musicVolume;
+        this.music.connect(this.master);
       }
       void this.ctx.resume();
     } catch {
@@ -52,6 +62,16 @@ export class Synth {
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(m ? 0 : tuning.audio.masterVolume, this.ctx.currentTime, 0.02);
   }
 
+  /** Separate music (the beat) and effects volumes, each 0..1. */
+  setVolumes(music: number, sfx: number): void {
+    this.musicVolume = music;
+    this.sfxVolume = sfx;
+    if (this.ctx && this.music && this.sfx) {
+      this.music.gain.setTargetAtTime(music, this.ctx.currentTime, 0.02);
+      this.sfx.gain.setTargetAtTime(sfx, this.ctx.currentTime, 0.02);
+    }
+  }
+
   suspend(): void {
     void this.ctx?.suspend().catch(() => {});
   }
@@ -60,9 +80,10 @@ export class Synth {
     void this.ctx?.resume().catch(() => {});
   }
 
-  private tone(freq: number, dur: number, type: OscillatorType, gain: number, delay = 0): void {
+  private tone(freq: number, dur: number, type: OscillatorType, gain: number, delay = 0, bus: 'sfx' | 'music' = 'sfx'): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.muted || ctx.state !== 'running') return;
+    const out = bus === 'music' ? this.music : this.sfx;
+    if (!ctx || !out || this.muted || ctx.state !== 'running') return;
     const t = ctx.currentTime + delay;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -71,7 +92,7 @@ export class Synth {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(gain, t + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.master);
+    osc.connect(g).connect(out);
     osc.start(t);
     osc.stop(t + dur + 0.02);
   }
@@ -126,7 +147,7 @@ export class Synth {
 
   private noise(dur: number, gain: number, from: number, to: number): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.muted || ctx.state !== 'running') return;
+    if (!ctx || !this.sfx || this.muted || ctx.state !== 'running') return;
     if (!this.noiseBuffer) {
       this.noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
       const d = this.noiseBuffer.getChannelData(0);
@@ -143,7 +164,7 @@ export class Synth {
     const g = ctx.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(this.sfx);
     src.start(t);
     src.stop(t + dur + 0.02);
   }
@@ -202,9 +223,9 @@ export class Synth {
       const i = this.beatIndex % 16;
       const v = tuning.audio.beatVolume;
       if (i % 4 === 0) this.kick(delay, v);
-      if (i % 2 === 0 || this.intense) this.tone(9000, 0.03, 'square', 0.012 * v * (i % 4 === 2 ? 2 : 1), delay);
-      if (this.intense && (i === 4 || i === 12)) this.tone(200, 0.12, 'triangle', 0.18 * v, delay);
-      if (this.intense && i % 4 === 0) this.tone(midiToHz(45 + (i === 8 ? 5 : 0)), 0.2, 'sawtooth', 0.08 * v, delay);
+      if (i % 2 === 0 || this.intense) this.tone(9000, 0.03, 'square', 0.012 * v * (i % 4 === 2 ? 2 : 1), delay, 'music');
+      if (this.intense && (i === 4 || i === 12)) this.tone(200, 0.12, 'triangle', 0.18 * v, delay, 'music');
+      if (this.intense && i % 4 === 0) this.tone(midiToHz(45 + (i === 8 ? 5 : 0)), 0.2, 'sawtooth', 0.08 * v, delay, 'music');
       this.nextBeatTime += sixteenth;
       this.beatIndex++;
     }
@@ -212,7 +233,7 @@ export class Synth {
 
   private kick(delay: number, v: number): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || this.muted) return;
+    if (!ctx || !this.music || this.muted) return;
     const t = ctx.currentTime + delay;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -220,7 +241,7 @@ export class Synth {
     osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
     g.gain.setValueAtTime(0.5 * v, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-    osc.connect(g).connect(this.master);
+    osc.connect(g).connect(this.music);
     osc.start(t);
     osc.stop(t + 0.2);
   }

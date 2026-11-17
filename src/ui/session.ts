@@ -2,13 +2,15 @@ import { signal } from '@preact/signals';
 import type { Synth } from '../audio/synth';
 import { tuning } from '../content/tuning';
 import { FixedStepper } from '../loop';
+import { fx } from '../render/fx';
 import { Juice } from '../render/juice';
 import { ArenaRenderer, sidePalette, type Overlay } from '../render/renderer';
 import type { CoreDef, ModPick } from '../sim/abilities';
 import type { EndReason } from '../sim/events';
 import { canUltimate, primaryOf, queueInput, type ControllerSpec } from '../sim/input';
 import { stepWorld } from '../sim/step';
-import { createWorld, type Phase, type SideIndex, type World } from '../sim/world';
+import { createWorld, type MatchTwist, type Phase, type SideIndex, type World } from '../sim/world';
+import type { HapticKind } from '../platform/types';
 import { sideLook } from './sides';
 
 const RUNNER_SLOTS = tuning.runner.maxPerSide * 2;
@@ -23,6 +25,10 @@ export interface SessionConfig {
   rival: ControllerSpec | null;
   /** When set, the game plays the player's side with this controller (auto-play). */
   assist: ControllerSpec | null;
+  /** Boss arena twist and other match rule changes (from `matchConfig`). */
+  twist?: MatchTwist | undefined;
+  /** Called for clashes, Core triggers and the result; the caller decides whether haptics are on. */
+  haptic?: ((kind: HapticKind) => void) | undefined;
 }
 
 export type Stage = 'aiming' | 'playing' | 'freeze' | 'result';
@@ -93,6 +99,7 @@ export class MatchSession {
       cores: cfg.cores,
       mods: cfg.mods,
       controllers: [cfg.assist, cfg.rival],
+      ...(cfg.twist ? { twist: cfg.twist } : {}),
     });
     this.hud = createHud([cfg.mods[0].length, cfg.mods[1].length]);
     this.renderer = new ArenaRenderer(canvas, [
@@ -242,6 +249,7 @@ export class MatchSession {
         case 'CoreTriggered':
           this.hud.triggers[ev.side].value++;
           this.synth.trigger(ev.side);
+          if (ev.side === 0) this.buzz('light', 140);
           break;
         case 'ModTriggered': {
           const sig = this.hud.modTriggers[ev.side][ev.slot];
@@ -250,7 +258,7 @@ export class MatchSession {
         }
         case 'UltimateFired':
           this.synth.ultimate(ev.side);
-          this.slowLeft = J.ultimateSlowSeconds * J.intensity;
+          this.slowLeft = J.ultimateSlowSeconds * fx.intensity;
           this.overlay.flash = 1;
           this.hud.ultimateBanner.value = { side: ev.side, n: (this.hud.ultimateBanner.value?.n ?? 0) + 1 };
           break;
@@ -275,6 +283,7 @@ export class MatchSession {
           break;
         case 'Clash':
           this.synth.clash();
+          this.buzz('medium', 160);
           break;
         case 'CellCaptured':
           this.onCapture(ev.side, ev.cell);
@@ -288,6 +297,7 @@ export class MatchSession {
         case 'MatchEnded':
           this.synth.stopBeat();
           this.synth.end(ev.winner === 0);
+          this.buzz('heavy', 0);
           this.juice.confetti(ev.winner, this.world.arena.size);
           this.freezeLeft = J.endFreezeSeconds;
           this.hud.stage.value = 'freeze';
@@ -296,6 +306,18 @@ export class MatchSession {
           break;
       }
     }
+  }
+
+  private lastBuzz = -Infinity;
+
+  /** A haptic pulse, rate-limited so a busy build does not buzz constantly. */
+  private buzz(kind: HapticKind, minGapMs: number): void {
+    const h = this.cfg.haptic;
+    if (!h) return;
+    const now = performance.now();
+    if (now - this.lastBuzz < minGapMs) return;
+    this.lastBuzz = now;
+    h(kind);
   }
 
   private render(alpha: number): void {

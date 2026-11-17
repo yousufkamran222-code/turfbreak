@@ -2,6 +2,16 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Run UI (Phase 3 screens and settings)
+
+- **Home keeps the chosen Core and Ascension, so Play is one tap.** Old (6.5): Home, then Core select. New: Home shows the last-used Core (tap it to change) and an Ascension stepper, and Play starts a run at once. The choice is stored under its own storage key (`turfbreak.ui`), not in the save document, so the save version stays 2. First launch still shows "WHO WINS?" and skips Home.
+- **Continue and New run.** With a run in progress, Home offers Continue as the big button and New run (which replaces the saved run) below it. The run is saved after every state change; Continue always restarts the current match from its VS card (the match seed is saved with the rival).
+- **Stats and Ascension are written when a match ends.** `bestRound` is the round reached (the next round once a draft opens). Winning a run at tier T sets the Core's best Ascension to T+1 (cap 8) if that is higher; an Endless loss never counts a second win. Quitting a run clears it and counts as neither a win nor a loss.
+- **Back button.** Screens register a handler (`src/ui/back.ts`); in a match back opens the pause overlay (Resume / Quit run), elsewhere it goes back to Home, and on Home and the first-launch pick nothing handles it, so the platform exits. Backgrounding the app also opens the pause overlay.
+- **Reduce motion** zeroes `fx.intensity` (`src/render/fx.ts`), which juice, the renderer and the session read instead of `tuning.juice.intensity`: no shake, hit-stop, slow-mo, flash or capture pop flash, and CSS animations are off. **High contrast** stripes side 1's cells with a dark diagonal pattern, thickens the frontier and stripes the territory bar.
+- **Audio buses.** The synth has separate music (the beat) and effects buses under the existing master, driven by the two volume settings. Mute still sits on the master.
+- **The Gauntlet prototype is gone.** The debug quick match remains under Home > Debug.
+
 ## 2026-11-16: Autonomous build-out (Stages A–D)
 
 Yousuf asked for several hours of autonomous work to bring the game to "complete per the planning docs", with decisions made without him and recorded here, and with cheaper agents used for implementation and playtesting. The working plan and interface contracts are in `STAGE_PLAN.md`.
