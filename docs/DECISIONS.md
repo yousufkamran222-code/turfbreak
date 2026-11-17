@@ -11,6 +11,20 @@ Yousuf asked for several hours of autonomous work to bring the game to "complete
 - **Phases 3 and 4 merged into Stage A.** Building four Cores and sixteen Mods first and then the rest would mean tuning rivals and runs twice. Stage A ships all 8 Cores and 30 Mods at once.
 - **Parallel agents in git worktrees,** each owning disjoint files, coding against the contracts in `STAGE_PLAN.md`. Numbers live in each Core's or Mod's own definition so they do not collide in `tuning.ts`.
 
+### Stage A content (agent results, merged 17 Nov)
+- **Ricochet and Splitter were weakened** so the six new Cores could compete. Discrete blasts (Pulse, Phantom) could not keep up with a continuous beam that grew to about 1,000 long.
+  - Ricochet: beam +11 per hit (was +40).
+  - Splitter: a split every 12 hits (was 8), splits at 0.75 size and 0.5 speed (was 0.7 and 0.7).
+- **Fortress's wave fires every 140 captures, not every 10.** At 10 it won 90% or more against most Cores. Its strength now rests on its ultimate, Bastion (+2 shield on every cell and a 3 s lock), with a cell cap of 1.
+- **Core matrix** (300 seeds each way, both sides on the rival heuristic): every pairing is between 34% and 66%. Bloom vs Fortress (34/66) is the one pairing outside the 35–65 band. Report: `docs/balance/stageA-core-matrix.md`.
+- **Ten Mods were weakened from the plan's numbers** because they won 80% or more at level 1. They include Scorched Trail, Underdog, Front Runner, Clash Engine, Glass Cannon and Comeback; each change is listed in the Mods agent's notes in `docs/balance/stageA-mod-impact.md`. Critical Mass also gives speed, because as written it only fired when its side was already winning.
+- **The run (`src/run/run.ts`):**
+  - Losing round 10 ends the run as a loss even with hearts left (the brief: beating round 10 wins it).
+  - A seventh Mod must replace one in a full build.
+  - Wipeout rerolls count only on a win.
+  - Endless keeps the current hearts and has a boss every 5 rounds.
+  - Starting unlocks are Ricochet, Splitter and the nine original Mods (Stage C revisits this).
+
 ### Sim API (groundwork for Stage A)
 - **Timers:** `ctx.after(seconds, fn)` replaces the Encore-only echo queue. Timers keep the identity of the hook that set them.
 - **Per-cell shields and locks:** shield points absorb one capture attempt each, with a 0.3 s pause between attempts so a runner sitting on a cell does not burn through them in two steps. Locks make a cell untakeable until a step.

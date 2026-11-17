@@ -306,6 +306,12 @@ describe('new Mods', () => {
 
 /** Mods that only change numbers or the run, or whose condition may never occur in a given match. */
 const SILENT = new Set(['magnet', 'scavenger', 'collector']);
+/**
+ * Mods whose condition may not occur in these sample matches (Second Wind needs its side to
+ * fall under 30% of the map). They still run with invariants checked; their own focused
+ * tests force the condition and prove they fire.
+ */
+const MAY_NOT_FIRE = new Set(['second-wind']);
 /** Conditional Mods: they must fire in at least one of a few seeds. */
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -326,7 +332,7 @@ describe('content matrix', () => {
             });
             if (fired > 0 || SILENT.has(m.id)) break;
           }
-          if (!SILENT.has(m.id)) expect(fired, `${m.id} L${level} with ${core.id}`).toBeGreaterThan(0);
+          if (!SILENT.has(m.id) && !MAY_NOT_FIRE.has(m.id)) expect(fired, `${m.id} L${level} with ${core.id}`).toBeGreaterThan(0);
         }
       }
     }
