@@ -53,7 +53,7 @@ If verification fails, the Console shows a reason. The most common one is a name
 
 ## 2. Make the privacy page live
 
-The privacy page is `public/privacy.html` in the repo. It is served by GitHub Pages at:
+The privacy page is `pages/privacy.html` in the repo. It is served by GitHub Pages at:
 
 **https://yousufkamran222-code.github.io/turfbreak/privacy.html**
 
@@ -63,7 +63,7 @@ Before this step, the page has a placeholder you must replace: `CONTACT_EMAIL`. 
 
 **Option B (GitHub website):**
 
-1. Open https://github.com/yousufkamran222-code/turfbreak/blob/main/public/privacy.html
+1. Open https://github.com/yousufkamran222-code/turfbreak/blob/main/pages/privacy.html
 2. Click the pencil icon (Edit this file).
 3. Find `CONTACT_EMAIL`, replace it with your address, and remove the highlight. The highlight is the `<span class="placeholder">` tag around it.
 4. Click **Commit changes**. Choose **Create a new branch for this commit and start a pull request**, then open the pull request.

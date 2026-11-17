@@ -43,6 +43,9 @@ jobs:
 
       - name: Build web target
         run: npm run build:web && npm run check:size
+      # Pages-only files (the privacy policy) stay out of the portal zip.
+      - name: Add Pages-only files
+        run: cp pages/* dist/
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

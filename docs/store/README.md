@@ -10,7 +10,7 @@ This folder has everything Yousuf needs to get Turfbreak onto Google Play (Andro
 | `listing.md` | Title options, short and full descriptions, CrazyGames copy, tags, categories, content-rating answers | Yousuf, when filling in both stores |
 | `play-console-guide.md` | Google Play: account, keystore, GitHub secrets, tagging a release, closed test, production | Yousuf |
 | `crazygames-guide.md` | CrazyGames: Basic Launch submission, requirements checklist, device checks, Full Launch changes | Yousuf |
-| `../../public/privacy.html` | Privacy policy, served at https://yousufkamran222-code.github.io/turfbreak/privacy.html | Both stores need its URL |
+| `../../pages/privacy.html` | Privacy policy, served at https://yousufkamran222-code.github.io/turfbreak/privacy.html | Both stores need its URL |
 
 ## The order
 
@@ -20,7 +20,7 @@ Some steps wait on other people or on the calendar. Start those first.
 2. **Start the slow things now.**
    - Create the Google Play developer account and complete identity verification (`play-console-guide.md` section 1).
    - Start recruiting 12 testers, plan for 15. They need Google accounts and must stay opted in for 14 days.
-3. **Replace the privacy placeholder and deploy the page.** Put your real contact email in place of `CONTACT_EMAIL` in `public/privacy.html`. Merge it, check the URL (`play-console-guide.md` section 2).
+3. **Replace the privacy placeholder and deploy the page.** Put your real contact email in place of `CONTACT_EMAIL` in `pages/privacy.html`. Merge it, check the URL (`play-console-guide.md` section 2).
 4. **Make the keystore and add the four GitHub secrets** (`play-console-guide.md` sections 4 and 5). Keep the keystore out of the repo, and back it up.
 5. **Tag a release** (`play-console-guide.md` section 6). The GitHub Release then has the signed AAB for Play and the portal zip for CrazyGames.
 6. **Submit to CrazyGames at Basic Launch** (`crazygames-guide.md`). This has no 14-day wait, so it can run alongside Play.
