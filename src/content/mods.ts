@@ -243,7 +243,7 @@ export const mods: readonly ModDef[] = [
     glyph: '✕',
     rarity: 'uncommon',
     group: 'Trigger',
-    text: (l) => `Each clash with an enemy runner counts as ${at(l, [1, 2, 3])} extra hits.`,
+    text: (l) => `Each clash with an enemy runner counts as ${at(l, [1, 2, 3]) + 1} hits.`,
     hooks: {
       onHit(ctx, hit, l) {
         if (hit.kind !== 'clash') return;
