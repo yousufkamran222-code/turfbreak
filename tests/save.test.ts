@@ -51,7 +51,7 @@ describe('save v2', () => {
     expect(s.launches).toBe(4);
     expect(s.settings).toEqual({ ...d.settings, sfxVolume: 0.5, reduceMotion: true });
     expect(s.run).toBeNull();
-    expect(s.stats).toEqual({ ...d.stats, runsWon: 2, bestRound: { ricochet: 5 } });
+    expect(s.stats).toEqual({ ...d.stats, runsWon: 2, runsCompleted: 2, bestRound: { ricochet: 5 } });
     expect(s.unlocks).toEqual(d.unlocks);
     expect(s.bestAscension).toEqual({});
   });

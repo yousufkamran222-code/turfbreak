@@ -7,10 +7,12 @@ import { Juice } from '../render/juice';
 import { ArenaRenderer, sidePalette, type Overlay } from '../render/renderer';
 import type { CoreDef, ModPick } from '../sim/abilities';
 import type { EndReason } from '../sim/events';
-import { canUltimate, primaryOf, queueInput, type ControllerSpec } from '../sim/input';
+import { APP_VERSION, type ReplayData } from '../meta/replay';
+import { canUltimate, primaryOf, queueInput, type ControllerSpec, type InputRecord } from '../sim/input';
 import { stepWorld } from '../sim/step';
 import { createWorld, type MatchTwist, type Phase, type SideIndex, type World } from '../sim/world';
 import type { HapticKind } from '../platform/types';
+import { MatchStats } from './matchStats';
 import { sideLook } from './sides';
 
 const RUNNER_SLOTS = tuning.runner.maxPerSide * 2;
@@ -25,6 +27,8 @@ export interface SessionConfig {
   rival: ControllerSpec | null;
   /** When set, the game plays the player's side with this controller (auto-play). */
   assist: ControllerSpec | null;
+  /** Recorded inputs of both sides (a replay). The match then plays itself: no aiming, no ultimate button. */
+  inputs?: readonly InputRecord[] | undefined;
   /** Boss arena twist and other match rule changes (from `matchConfig`). */
   twist?: MatchTwist | undefined;
   /** Called for clashes, Core triggers and the result; the caller decides whether haptics are on. */
@@ -58,7 +62,7 @@ export function createHud(modCounts: readonly [number, number]) {
     /** Bumped when an ultimate fires, with the side, for the banner. */
     ultimateBanner: signal<{ side: SideIndex; n: number } | null>(null),
     effects: [signal(''), signal('')] as const,
-    speed: signal<1 | 2>(1),
+    speed: signal<1 | 2 | 4>(1),
   };
 }
 export type Hud = ReturnType<typeof createHud>;
@@ -71,6 +75,10 @@ export type Hud = ReturnType<typeof createHud>;
 export class MatchSession {
   readonly world: World;
   readonly hud: Hud;
+  /** Counts what unlock feats need; read `stats.summary(world)` once the match ends. */
+  readonly stats: MatchStats;
+  /** True when nobody aims or fires: auto-play, a replay or a Versus Lab match. */
+  readonly passive: boolean;
   private readonly renderer: ArenaRenderer;
   private readonly juice: Juice;
   private readonly stepper = new FixedStepper(SPS, tuning.sim.maxStepsPerFrame);
@@ -98,9 +106,12 @@ export class MatchSession {
       seed: cfg.seed,
       cores: cfg.cores,
       mods: cfg.mods,
-      controllers: [cfg.assist, cfg.rival],
+      controllers: cfg.inputs ? [null, null] : [cfg.assist, cfg.rival],
+      ...(cfg.inputs ? { inputs: cfg.inputs } : {}),
       ...(cfg.twist ? { twist: cfg.twist } : {}),
     });
+    this.passive = !!cfg.assist || !!cfg.inputs;
+    this.stats = new MatchStats(this.world, cfg.mods[0].length, cfg.cores[1].id);
     this.hud = createHud([cfg.mods[0].length, cfg.mods[1].length]);
     this.renderer = new ArenaRenderer(canvas, [
       sidePalette(sideLook(cfg.cores, 0).color),
@@ -108,7 +119,7 @@ export class MatchSession {
     ]);
     this.juice = new Juice(this.world.arena.cellCount, cfg.seed);
     const r = primaryOf(this.world, 0);
-    if (r && !cfg.assist) this.aim = { dx: r.dx, dy: r.dy };
+    if (r && !this.passive) this.aim = { dx: r.dx, dy: r.dy };
     this.syncPrev(0);
     this.pushHud();
   }
@@ -122,8 +133,8 @@ export class MatchSession {
   start(): void {
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
-    // Auto-play skips aiming: the controller aims on the first step.
-    if (this.cfg.assist) this.launch();
+    // Auto-play and replays skip aiming: the controller (or the record) aims on the first step.
+    if (this.passive) this.launch();
   }
 
   stop(): void {
@@ -144,13 +155,50 @@ export class MatchSession {
     }
   }
 
-  toggleSpeed(): void {
-    this.hud.speed.value = this.hud.speed.value === 1 ? 2 : 1;
+  /** Cycle through `speeds` (1x, 2x by default). */
+  toggleSpeed(speeds: readonly (1 | 2 | 4)[] = [1, 2]): void {
+    const i = speeds.indexOf(this.hud.speed.value);
+    this.hud.speed.value = speeds[(i + 1) % speeds.length] ?? 1;
+  }
+
+  /**
+   * Run the rest of the match at once: no juice or audio for the steps in
+   * between, only the feat counters, then the final step's events as usual.
+   */
+  skipToEnd(): void {
+    if (this.hud.stage.value === 'aiming') this.launch();
+    if (this.hud.stage.value !== 'playing') return;
+    const w = this.world;
+    const ended = (): boolean => w.phase === 'ended';
+    let guard = 0;
+    while (!ended() && guard++ < 200_000) {
+      this.syncPrev(0);
+      const before = w.runners.length;
+      stepWorld(w);
+      this.stats.observe(w);
+      this.syncPrev(before);
+      if (!ended()) w.events.length = 0;
+    }
+    this.consumeEvents();
+  }
+
+  /** Everything needed to play this match back: seed, Cores, builds, twist and the inputs applied so far. */
+  replayData(): ReplayData {
+    const c = this.cfg;
+    const entry = (p: ModPick) => ({ id: p.mod.id, level: p.level });
+    return {
+      version: APP_VERSION,
+      seed: c.seed,
+      cores: [c.cores[0].id, c.cores[1].id],
+      builds: [c.mods[0].map(entry), c.mods[1].map(entry)],
+      twist: c.twist ?? null,
+      inputs: [...this.world.inputLog],
+    };
   }
 
   /** While aiming, point the launch from the player's runner toward (x, y) in arena units. */
   aimAt(x: number, y: number): void {
-    if (this.hud.stage.value !== 'aiming' || this.cfg.assist) return;
+    if (this.hud.stage.value !== 'aiming' || this.passive) return;
     const r = primaryOf(this.world, 0);
     if (!r) return;
     const dx = x - r.x;
@@ -163,14 +211,14 @@ export class MatchSession {
   /** Release the launch (from a finger lift, or when aiming time runs out). */
   launch(): void {
     if (this.hud.stage.value !== 'aiming') return;
-    if (this.aim && !this.cfg.assist) queueInput(this.world, { side: 0, type: 'launch', dx: this.aim.dx, dy: this.aim.dy });
+    if (this.aim && !this.passive) queueInput(this.world, { side: 0, type: 'launch', dx: this.aim.dx, dy: this.aim.dy });
     this.hud.stage.value = 'playing';
     this.synth.launch();
     this.synth.startBeat();
   }
 
   fireUltimate(): void {
-    if (this.cfg.assist || this.hud.stage.value !== 'playing' || !canUltimate(this.world, 0)) return;
+    if (this.passive || this.hud.stage.value !== 'playing' || !canUltimate(this.world, 0)) return;
     queueInput(this.world, { side: 0, type: 'ultimate' });
   }
 
@@ -207,6 +255,7 @@ export class MatchSession {
             const before = this.world.runners.length;
             this.syncPrev(0);
             stepWorld(this.world);
+            this.stats.observe(this.world);
             this.syncPrev(before);
             this.consumeEvents();
           });
@@ -344,6 +393,6 @@ export class MatchSession {
     h.winner.value = w.winner;
     h.endReason.value = w.endReason;
     h.leadChanges.value = w.leadChanges;
-    h.ultimateReady.value = !this.cfg.assist && canUltimate(w, 0);
+    h.ultimateReady.value = !this.passive && canUltimate(w, 0);
   }
 }

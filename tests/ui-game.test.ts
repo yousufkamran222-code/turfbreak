@@ -14,6 +14,7 @@ function fakePlatform(): Platform & { store: Map<string, string>; buzz: string[]
     store,
     buzz,
     id: 'web',
+    canShareFiles: true,
     init: async () => {},
     loadingFinished() {},
     gameplayStart() {},
@@ -26,6 +27,7 @@ function fakePlatform(): Platform & { store: Map<string, string>; buzz: string[]
     storageSet: async (k, v) => void store.set(k, v),
     haptic: (k) => void buzz.push(k),
     share: async () => false,
+    copy: async () => true,
     onPause: () => () => {},
     onResume: () => () => {},
     onBack: () => () => {},
@@ -44,7 +46,11 @@ beforeEach(() => {
 function winAll(game: Game, margin: number): void {
   for (let i = 0; i < 40 && game.save.value.run && game.save.value.run.phase !== 'summary'; i++) {
     const run = game.save.value.run;
-    if (run.phase === 'draft') game.pick(run.offer[0] ?? null);
+    if (run.phase === 'draft') {
+      // A full build cannot take a new Mod without choosing a slot: skip instead.
+      const id = run.offer.find((o) => run.build.some((e) => e.id === o) || run.build.length < 6);
+      game.pick(id ?? null);
+    }
     else if (run.phase === 'match') game.finish({ winner: 0, margin, wipeout: false });
   }
 }

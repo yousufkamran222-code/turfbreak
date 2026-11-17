@@ -523,3 +523,89 @@ button:disabled { opacity: 0.4; cursor: default; }
 .match-footer button { white-space: nowrap; padding: 0 14px; }
 .match-footer .seed { flex: 1; min-width: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .match-footer .row { flex: none; }
+
+/* ---- Retention (Phase 6) -------------------------------------------------------------- */
+.center-col { justify-content: center; align-items: center; text-align: center; }
+.error { margin: 0; color: var(--bad); font-weight: 700; font-size: 14px; text-align: center; }
+.next-unlock { margin-top: -4px; }
+
+/* Home: Daily, links */
+button.daily, .daily.done {
+  width: 100%;
+  background: var(--panel);
+  color: var(--text);
+  border: 2px solid #3a4256;
+  border-radius: 16px;
+  padding: 12px 14px;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.daily.done { align-items: stretch; cursor: default; }
+.daily-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; width: 100%; }
+.daily-head b { letter-spacing: 0.12em; font-size: 15px; font-weight: 900; }
+.daily-head span { font-size: 13px; color: var(--muted); }
+.daily small { color: var(--muted); font-size: 12px; }
+.daily-grid { font-size: 22px; letter-spacing: 2px; text-align: center; line-height: 1.3; word-break: break-all; }
+.moment.daily-grid { font-size: 26px; }
+.home-links button { flex: 1; flex-direction: column; display: flex; align-items: center; justify-content: center; gap: 1px; min-height: 56px; }
+.home-links small { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+
+/* Segmented control */
+.seg { display: flex; gap: 6px; background: var(--panel); border-radius: 14px; padding: 4px; }
+.seg button { flex: 1; background: transparent; color: var(--muted); border-radius: 10px; min-height: 48px; padding: 0 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; font-size: 14px; }
+.seg button small { font-size: 11px; font-weight: 600; opacity: 0.8; }
+.seg button.on { background: var(--accent); color: #0b0d12; }
+
+/* Collection */
+.progress { margin: -6px 0 0; font-size: 15px; }
+.progress b { font-size: 20px; }
+.coll-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.coll-card, .coll-mod { background: var(--panel); border: 2px solid var(--card, #2a3040); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.coll-mod { flex-direction: row; align-items: flex-start; gap: 12px; border-color: #2a3040; }
+.coll-card.locked, .coll-mod.locked { opacity: 0.6; }
+.coll-head { display: flex; gap: 12px; align-items: center; }
+.coll-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.coll-title b { font-size: 15px; letter-spacing: 0.04em; }
+.coll-text { font-size: 13px; }
+.coll-text.dim { color: var(--muted); font-size: 12px; }
+.coll-hint { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.02em; }
+.coll-card .core-ult { margin: 0; }
+.coll-stats { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.coll-stats div { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; border-bottom: 1px solid #232a3a; padding-bottom: 3px; }
+.coll-stats dt { color: var(--muted); }
+.coll-stats dd { margin: 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 700; }
+.coll-mod .mod-icon { flex: none; }
+
+/* Unlock toast */
+.toasts { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top, 0); z-index: 30; display: flex; flex-direction: column; gap: 8px; align-items: center; padding: 10px 12px; pointer-events: none; }
+.toast { pointer-events: auto; width: 100%; max-width: 456px; min-height: 56px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: #1d2a18; color: var(--text); border: 2px solid var(--good); border-radius: 14px; padding: 8px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55); animation: toast-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1); letter-spacing: 0.02em; }
+.toast-title { font-weight: 900; letter-spacing: 0.1em; color: var(--good); font-size: 15px; }
+.toast-sub { font-weight: 500; font-size: 12px; color: var(--muted); }
+@keyframes toast-in { from { transform: translateY(-120%); opacity: 0; } to { transform: none; opacity: 1; } }
+.reduce-motion .toast { animation: none; }
+
+/* Versus Lab */
+.lab .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; background: var(--panel); color: var(--text); border: 2px solid #2a3040; border-radius: 22px; font-size: 14px; }
+.chip.on { border-color: var(--card); box-shadow: 0 0 0 1px var(--card); }
+.lab-sig { margin: 0; font-size: 13px; }
+.lab-hint { margin: 0; }
+.mod-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mod-pick { min-height: 56px; padding: 4px 6px; display: grid; grid-template-columns: auto 1fr; grid-template-areas: 'g n' 'g l'; column-gap: 6px; align-items: center; text-align: left; background: var(--panel); color: var(--text); border: 2px solid #2a3040; border-radius: 12px; font-weight: 600; letter-spacing: 0; }
+.mod-pick.on { border-color: var(--accent); background: #1d2436; }
+.mod-pick .g { grid-area: g; font-size: 20px; }
+.mp-name { grid-area: n; font-size: 11px; line-height: 1.1; overflow-wrap: normal; }
+.mp-lv { grid-area: l; font-size: 11px; font-weight: 800; color: var(--good); }
+.lab input[type='text'] { min-width: 0; }
+
+/* Match extras */
+.replay-banner { align-self: center; padding: 2px 14px; border-radius: 999px; background: var(--accent); color: #0b0d12; font-weight: 900; letter-spacing: 0.2em; font-size: 12px; }
+.result .export { gap: 8px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
+.result .export button { flex: 1 1 0; padding: 0 8px; font-size: 13px; white-space: nowrap; }
+.flash-note { font-size: 12px; font-weight: 800; color: var(--good); letter-spacing: 0.06em; min-height: 16px; }

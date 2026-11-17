@@ -1,22 +1,28 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { dailyShareText, gridEmoji, roundLetter, type DailyResult } from '../content/daily';
+import { rulesFor } from '../content/ascension';
 import { mods } from '../content/mods';
 import type { Platform } from '../platform';
 import type { RunState } from '../run/run';
 import { useBack } from './back';
 import { bestMoment } from './moment';
 import { findCore, coreName, Hearts, ModIcon } from './parts';
+import { resultLabel, shareOrCopy } from './share';
 
 interface Props {
   run: RunState;
   platform: Platform;
   /** The Ascension tier this run just unlocked, if any. */
   unlocked: number | null;
+  /** The UTC day, for a Daily Clash run: the summary then shares the Daily result and offers no Endless. */
+  dailyDay?: string | undefined;
   onAgain(): void;
   onEndless(): void;
   onHome(): void;
 }
 
-export function SummaryScreen({ run, platform, unlocked, onAgain, onEndless, onHome }: Props) {
+export function SummaryScreen({ run, platform, unlocked, dailyDay, onAgain, onEndless, onHome }: Props) {
+  const [note, setNote] = useState<string | null>(null);
   useBack(() => {
     onHome();
     return true;
@@ -29,7 +35,18 @@ export function SummaryScreen({ run, platform, unlocked, onAgain, onEndless, onH
   const wins = run.history.filter((h) => h.won).length;
   const moment = bestMoment(run.history);
   const title = won ? 'RUN WON' : run.endless ? 'ENDLESS OVER' : 'RUN OVER';
-  const shareText = `${won ? 'Won' : 'Lost'} a Turfbreak run with ${core ? coreName(core) : run.coreId}: ${wins} rounds won, reached round ${run.round}.`;
+  const daily = run.mode === 'daily' && dailyDay !== undefined;
+  const dailyResult: DailyResult = {
+    coreId: run.coreId,
+    won,
+    round: run.round,
+    rounds: rulesFor(run.ascension).rounds,
+    grid: run.history.map(roundLetter).join(''),
+    hearts: run.hearts,
+  };
+  const shareText = daily
+    ? dailyShareText(dailyDay, core ? coreName(core) : run.coreId, dailyResult)
+    : `${won ? 'Won' : 'Lost'} a Turfbreak run with ${core ? coreName(core) : run.coreId}: ${wins} rounds won, reached round ${run.round}.`;
 
   return (
     <main class="screen summary">
@@ -60,6 +77,13 @@ export function SummaryScreen({ run, platform, unlocked, onAgain, onEndless, onH
         </p>
       )}
 
+      {daily && (
+        <p class="moment daily-grid" aria-label="Round results">
+          <span>DAILY CLASH {dailyDay}</span>
+          {gridEmoji(dailyResult.grid)}
+        </p>
+      )}
+
       {unlocked !== null && <p class="unlock">Ascension {unlocked} unlocked for this Core!</p>}
 
       <section class="final-build">
@@ -85,17 +109,27 @@ export function SummaryScreen({ run, platform, unlocked, onAgain, onEndless, onH
       </section>
 
       <div class="stack-actions">
-        {won && (
+        {won && !daily && (
           <button type="button" class="primary big" id="endless" onClick={onEndless}>
             Continue (Endless)
           </button>
         )}
-        <button type="button" class={won ? 'secondary big' : 'primary big'} id="again" onClick={onAgain}>
-          Play again
-        </button>
+        {!daily && (
+          <button type="button" class={won ? 'secondary big' : 'primary big'} id="again" onClick={onAgain}>
+            Play again
+          </button>
+        )}
         <div class="row">
-          <button type="button" class="secondary" onClick={() => void platform.share({ text: shareText })}>
-            Share
+          <button
+            type="button"
+            class={daily ? 'primary' : 'secondary'}
+            id="share"
+            onClick={async () => {
+              setNote(resultLabel[await shareOrCopy(platform, { text: shareText })]);
+              window.setTimeout(() => setNote(null), 2000);
+            }}
+          >
+            {note ?? (daily ? 'Share result' : 'Share')}
           </button>
           <button type="button" class="secondary" id="home" onClick={onHome}>
             Home

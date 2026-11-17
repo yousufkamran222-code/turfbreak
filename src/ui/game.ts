@@ -1,19 +1,14 @@
 import { signal } from '@preact/signals';
 import type { Synth } from '../audio/synth';
 import { cores } from '../content/cores';
+import { mods } from '../content/mods';
 import type { Platform } from '../platform';
 import { setHighContrast, setReduceMotion } from '../render/fx';
-import {
-  continueEndless,
-  finishMatch,
-  MAX_ASCENSION,
-  pickMod,
-  replaceMod,
-  rerollOffer,
-  startRun,
-  type RunState,
-} from '../run/run';
-import { SAVE_KEY, serializeSave, type Save, type Settings } from '../meta/save';
+import { dailyCoreId, dailySeed, utcDay } from '../content/daily';
+import { featFor, type Feat, type MatchSummary } from '../content/unlocks';
+import { applyMatch } from '../meta/progress';
+import { continueEndless, MAX_ASCENSION, pickMod, replaceMod, rerollOffer, startRun, type RunState } from '../run/run';
+import { defaultCoreStats, SAVE_KEY, serializeSave, type Save, type Settings } from '../meta/save';
 
 const PREFS_KEY = 'turfbreak.ui';
 
@@ -27,6 +22,8 @@ export interface MatchOutcome {
   winner: 0 | 1;
   margin: number;
   wipeout: boolean;
+  /** What the match counted for unlock feats and records. */
+  summary?: MatchSummary | undefined;
 }
 
 /** A fresh seed for a run. UI-side randomness only; every run is reproducible from it. */
@@ -37,6 +34,11 @@ export function newSeed(): number {
 /** Highest Ascension tier the player may start for a Core. */
 export function maxTier(save: Save, coreId: string): number {
   return Math.max(0, Math.min(MAX_ASCENSION, save.bestAscension[coreId] ?? 0));
+}
+
+/** The Versus Lab opens after the first completed run, won or lost. */
+export function labUnlocked(save: Save): boolean {
+  return save.stats.runsCompleted > 0 || save.stats.runsWon > 0;
 }
 
 /** Unlocked Core ids that still exist in content. */
@@ -54,6 +56,8 @@ export class Game {
   readonly prefs = signal<Prefs>({ coreId: 'ricochet', ascension: 0 });
   /** The Ascension tier a just-won run unlocked, for the summary. Not saved. */
   readonly unlocked = signal<number | null>(null);
+  /** Feats just met, for the "UNLOCKED" banner. Not saved. */
+  readonly newFeats = signal<Feat[]>([]);
 
   constructor(
     readonly platform: Platform,
@@ -130,7 +134,25 @@ export class Game {
     const run = startRun({ seed: newSeed(), coreId, ascension: tier, unlockedMods: s.unlocks.mods });
     this.unlocked.value = null;
     this.setPrefs({ coreId, ascension: tier });
-    this.setRun(run, { ...s.stats, runsStarted: s.stats.runsStarted + 1 });
+    this.setRun(run, this.countRun(s.stats, coreId));
+  }
+
+  private countRun(stats: Save['stats'], coreId: string): Save['stats'] {
+    const c = stats.byCore[coreId] ?? defaultCoreStats();
+    return { ...stats, runsStarted: stats.runsStarted + 1, byCore: { ...stats.byCore, [coreId]: { ...c, runs: c.runs + 1 } } };
+  }
+
+  /** Today's Daily Clash, if it has not been finished yet: fixed Core and seed, every Mod in the pool. */
+  beginDaily(nowMs: number = Date.now()): void {
+    const s = this.save.value;
+    const day = utcDay(nowMs);
+    if (s.daily?.day === day && s.daily.result) return;
+    const coreId = dailyCoreId(day);
+    // The pool is every Mod, whatever the player has unlocked, so everyone sees the same offers.
+    const run = startRun({ seed: dailySeed(day), coreId, ascension: 0, mode: 'daily' });
+    this.unlocked.value = null;
+    this.newFeats.value = [];
+    this.commit({ ...s, run, daily: { day, result: null }, stats: this.countRun(s.stats, coreId) });
   }
 
   pick(modId: string | null): void {
@@ -148,33 +170,18 @@ export class Game {
     if (run) this.setRun(replaceMod(run, modId, slot));
   }
 
-  /** Record a match: run state, stats, best round and, on a first win at a tier, the next Ascension. */
+  /** Record a match: run state, stats, records, feats and, on a first win at a tier, the next Ascension. */
   finish(o: MatchOutcome): void {
-    const s = this.save.value;
-    const run = s.run;
-    if (!run || run.phase !== 'match') return;
-    const next = finishMatch(run, { won: o.winner === 0, margin: o.margin, wipeout: o.wipeout });
-    const stats = {
-      ...s.stats,
-      matchesWon: s.stats.matchesWon + (o.winner === 0 ? 1 : 0),
-      matchesLost: s.stats.matchesLost + (o.winner === 0 ? 0 : 1),
-      bestRound: { ...s.stats.bestRound, [run.coreId]: Math.max(s.stats.bestRound[run.coreId] ?? 0, next.round) },
-    };
-    let bestAscension = s.bestAscension;
-    if (next.phase === 'summary' && next.outcome === 'won' && !run.endless) {
-      stats.runsWon++;
-      const earned = Math.min(MAX_ASCENSION, run.ascension + 1);
-      if (earned > (bestAscension[run.coreId] ?? 0)) {
-        bestAscension = { ...bestAscension, [run.coreId]: earned };
-        this.unlocked.value = earned;
-      }
-    }
-    this.setRun(next, stats, bestAscension);
+    const done = applyMatch(this.save.value, o);
+    if (done.save === this.save.value) return;
+    if (done.ascension !== null) this.unlocked.value = done.ascension;
+    this.newFeats.value = done.unlocked;
+    this.commit(done.save);
   }
 
   endless(): void {
     const run = this.save.value.run;
-    if (run) this.setRun(continueEndless(run));
+    if (run && run.mode === 'standard') this.setRun(continueEndless(run));
   }
 
   /** Drop the run in progress (quit, or a finished summary). */
@@ -184,4 +191,10 @@ export class Game {
   }
 }
 
-export { MAX_ASCENSION };
+/** "UNLOCKED: Bloom" lines for a set of feats. */
+export function featName(f: Pick<Feat, 'kind' | 'id'>): string {
+  const name = f.kind === 'core' ? cores.find((c) => c.id === f.id)?.name : mods.find((m) => m.id === f.id)?.name;
+  return name ?? f.id;
+}
+
+export { MAX_ASCENSION, featFor };

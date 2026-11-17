@@ -8,6 +8,8 @@ export type RewardedResult = 'rewarded' | 'dismissed' | 'unavailable';
  */
 export interface Platform {
   readonly id: PlatformId;
+  /** Whether `share({ file })` can work here (hides Save clip when false). */
+  readonly canShareFiles: boolean;
   init(): Promise<void>;
   loadingFinished(): void;
   /** Match begins or resumes. */
@@ -22,7 +24,10 @@ export interface Platform {
   storageGet(key: string): Promise<string | null>;
   storageSet(key: string, value: string): Promise<void>;
   haptic(kind: HapticKind): void;
-  share(payload: { text?: string; url?: string; file?: Blob }): Promise<boolean>;
+  /** Open the system share sheet. False when there is none (or the person dismissed it). A `file` that cannot be shared is saved as a download on web. */
+  share(payload: { text?: string; url?: string; file?: Blob; fileName?: string }): Promise<boolean>;
+  /** Put text on the clipboard. Used as the fallback when there is no share sheet. */
+  copy(text: string): Promise<boolean>;
   /**
    * Lifecycle hooks, added to the 7.1 sketch so the game can pause when the
    * tab is hidden or the app is backgrounded. Each returns an unsubscribe.

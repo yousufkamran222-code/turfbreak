@@ -1,9 +1,15 @@
 import { ascensionTiers } from '../content/ascension';
+import { useState } from 'preact/hooks';
 import { cores } from '../content/cores';
+import { mods } from '../content/mods';
+import { dailyCoreId, dailyShareText, previousDay, utcDay } from '../content/daily';
+import { featFor } from '../content/unlocks';
 import type { CoreDef } from '../sim/abilities';
 import { useBack } from './back';
-import { maxTier, unlockedCores, type Game } from './game';
+import { labUnlocked, maxTier, unlockedCores, type Game } from './game';
 import { findCore, coreName, ShapeIcon } from './parts';
+import { gridEmoji } from '../content/daily';
+import { resultLabel, shareOrCopy } from './share';
 
 interface CoreInfoProps {
   core: CoreDef;
@@ -23,6 +29,56 @@ function CoreInfo({ core }: CoreInfoProps) {
   );
 }
 
+const modTotal = mods.length;
+
+/** Today's Daily Clash: start it, continue it, or (once finished) show the result with a share button. */
+function DailyCard({ game, onStart, onResume }: { game: Game; onStart(): void; onResume(): void }) {
+  const save = game.save.value;
+  const day = utcDay(Date.now());
+  const core = findCore(dailyCoreId(day));
+  const [note, setNote] = useState<string | null>(null);
+  const result = save.daily?.day === day ? save.daily.result : null;
+  const streak = save.streak.last === day || save.streak.last === previousDay(day) ? save.streak.count : 0;
+  const streakText = streak >= 2 ? ` · ${streak} day streak` : '';
+  if (result && core) {
+    const text = dailyShareText(day, coreName(core), result);
+    return (
+      <div class="daily done" id="daily-done">
+        <div class="daily-head">
+          <b>DAILY CLASH</b>
+          <span>
+            {result.won ? 'Run won' : `Out in round ${result.round}`}
+            {streakText}
+          </span>
+        </div>
+        <div class="daily-grid" aria-label="Round results">{gridEmoji(result.grid)}</div>
+        <button
+          type="button"
+          class="secondary small"
+          id="daily-share"
+          onClick={async () => {
+            setNote(resultLabel[await shareOrCopy(game.platform, { text })]);
+            window.setTimeout(() => setNote(null), 2000);
+          }}
+        >
+          {note ?? 'Share result'}
+        </button>
+        <small>Come back tomorrow for a new Core and seed.</small>
+      </div>
+    );
+  }
+  const inProgress = save.run?.mode === 'daily' && save.daily?.day === day;
+  return (
+    <button type="button" class="daily" id="daily" onClick={inProgress ? onResume : onStart}>
+      <span class="daily-head">
+        <b>DAILY CLASH</b>
+        <span>{inProgress ? 'Continue today\'s run' : `Today: ${core ? coreName(core) : '?'}`}{streakText}</span>
+      </span>
+      <small>One seeded run a day, the same for everyone. One scored attempt.</small>
+    </button>
+  );
+}
+
 /** Home: one tap on Play (or Continue) from launch to a run. */
 export function HomeScreen({
   game,
@@ -30,6 +86,10 @@ export function HomeScreen({
   onChangeCore,
   onSettings,
   onDebug,
+  onCollection,
+  onLab,
+  onDaily,
+  onDailyResume,
 }: {
   game: Game;
   /** Open the run screens (they follow the saved run). */
@@ -37,6 +97,11 @@ export function HomeScreen({
   onChangeCore(): void;
   onSettings(): void;
   onDebug(): void;
+  onCollection(): void;
+  onLab(): void;
+  /** Start today's Daily Clash. */
+  onDaily(): void;
+  onDailyResume(): void;
 }) {
   const save = game.save.value;
   const prefs = game.prefs.value;
@@ -44,6 +109,8 @@ export function HomeScreen({
   const best = maxTier(save, core.id);
   const run = save.run;
   const runCore = run ? findCore(run.coreId) : undefined;
+  const nextLocked = cores.find((c) => !save.unlocks.cores.includes(c.id));
+  const nextHint = nextLocked ? featFor('core', nextLocked.id)?.hint : undefined;
   const tierText = prefs.ascension === 0 ? 'Base game.' : (ascensionTiers[prefs.ascension - 1]?.description ?? '');
 
   return (
@@ -88,6 +155,11 @@ export function HomeScreen({
         </button>
       </div>
       {best === 0 && <p class="hint">Win a run with this Core to unlock Ascension 1.</p>}
+      {nextLocked && nextHint && (
+        <p class="hint next-unlock">
+          Locked: {nextLocked.name}. {nextHint}
+        </p>
+      )}
 
       <div class="stack-actions">
         {run && runCore && (
@@ -114,6 +186,21 @@ export function HomeScreen({
           }}
         >
           {run ? 'New run' : 'Play'}
+        </button>
+      </div>
+
+      <DailyCard game={game} onStart={onDaily} onResume={onDailyResume} />
+
+      <div class="row home-links">
+        <button type="button" class="secondary" id="lab" disabled={!labUnlocked(save)} onClick={onLab}>
+          Versus Lab
+          {!labUnlocked(save) && <small>Finish a run</small>}
+        </button>
+        <button type="button" class="secondary" id="collection" onClick={onCollection}>
+          Collection
+          <small>
+            {save.unlocks.cores.length + save.unlocks.mods.length} / {cores.length + modTotal} found
+          </small>
         </button>
       </div>
 
@@ -158,9 +245,15 @@ export function CoreSelectScreen({ game, onDone }: { game: Game; onDone(): void 
             >
               <ShapeIcon shape={c.shape} color={unlocked ? c.color : '#555b70'} size={44} />
               <span class="core-text">
-                <CoreInfo core={c} />
+                {unlocked ? (
+                  <CoreInfo core={c} />
+                ) : (
+                  <>
+                    <span class="core-title">{coreName(c)}</span>
+                    <span class="core-sig">LOCKED · {featFor('core', c.id)?.hint ?? 'Unlock by playing.'}</span>
+                  </>
+                )}
               </span>
-              {!unlocked && <span class="lock">Unlock later</span>}
             </button>
           );
         })}

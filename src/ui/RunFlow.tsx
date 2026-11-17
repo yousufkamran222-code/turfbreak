@@ -72,6 +72,7 @@ export function RunFlow({ game, onHome }: { game: Game; onHome(): void }) {
         run={run}
         platform={game.platform}
         unlocked={game.unlocked.value}
+        dailyDay={game.save.value.daily?.day}
         onEndless={() => game.endless()}
         onAgain={() => game.begin(run.coreId, run.ascension)}
         onHome={() => {

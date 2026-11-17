@@ -2,6 +2,17 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Stage C (retention features, Phase 6)
+
+- **Starting roster.** Old (Stage A): Ricochet, Splitter and 9 Mods. New: Ricochet, Splitter, Pulse and 14 Mods (Overclock, Growth Spurt, Chain Reaction, Shockwave, Head Start, Clash Engine, Wall Hugger, Scorched Trail, Ramparts, Underdog, Front Runner, Scavenger, Echo, Decoy); only one pickup Mod (Shockwave) is in it. Saves are merged, never trimmed: an existing save keeps everything it had and gains the new starters.
+- **One feat per locked item (21).** Feats are functions in `src/content/unlocks.ts` of a per-match summary (counted in the UI layer by `src/ui/matchStats.ts` from sim events and the final world), the run state and lifetime stats. Thresholds were set from 300 random matches so match-level feats hold in roughly 5 to 35% of matches. Table in the Stage C report and in the code. Versus Lab, replays and the debug match never unlock anything.
+- **Lifetime stats.** `stats.byCore` holds runs, run wins, best margin, longest beam (Ricochet only), most splits alive (Splitter only), fastest Wipeout and best Endless round; plus global `runsCompleted`, `ultimates`, `pickups`, `wipeouts`. No save version bump: every field falls back on its own.
+- **Daily Clash.** Seed is FNV-1a of `turfbreak-daily-YYYY-MM-DD`; the Core is every Core in turn by day number, and the offer pool is every Mod (not the player's unlocks) so everyone sees the same offers. The first run *finished* on a day is the scored one; quitting leaves the attempt open (the run is identical on retry, so nothing is gained but nothing is punished). A day change mid-run counts for the day it started. Daily never raises Ascension and has no Endless. Streak is shown from 2 days and never reset as a punishment (it just restarts). Date maths avoids `Date`, so `src/content` stays clock-free.
+- **Versus Lab** opens after the first completed run (won or lost). Both sides use the rival heuristic. Sides are labelled neutrally.
+- **Replay codes** are a binary record (varints, float64 launch vectors for bit-exact replay, 16-bit checksum) in base64url, about 80 to 150 characters. Indices use the sorted id lists, so a code only plays on the same major.minor; other versions get a friendly refusal. **Rule: bump the minor version whenever content or sim numbers change in a way that alters matches**, or old codes will replay differently. A test replays a match headlessly and compares the final `hashWorld`.
+- **Platform additions:** `copy(text)` (clipboard fallback when there is no share sheet), `canShareFiles` and `share({ file })` (web: share sheet or download). Android cannot share files yet: it needs `@capacitor/filesystem` (not installed), so Save clip is hidden there.
+- **Clip export** keeps two staggered MediaRecorders, each restarted when 16 s old, because a WebM cannot be trimmed from the front; Save clip returns the older one (8 to 16 s). Everything is feature-detected and guarded.
+
 ## 2026-11-17: Run UI (Phase 3 screens and settings)
 
 - **Home keeps the chosen Core and Ascension, so Play is one tap.** Old (6.5): Home, then Core select. New: Home shows the last-used Core (tap it to change) and an Ascension stepper, and Play starts a run at once. The choice is stored under its own storage key (`turfbreak.ui`), not in the save document, so the save version stays 2. First launch still shows "WHO WINS?" and skips Home.

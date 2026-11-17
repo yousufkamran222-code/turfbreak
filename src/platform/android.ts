@@ -19,6 +19,7 @@ export function createAndroidPlatform(): Platform {
 
   return {
     id: 'android',
+    canShareFiles: false,
     async init() {
       await App.addListener('pause', () => pause.emit());
       await App.addListener('resume', () => resume.emit());
@@ -50,8 +51,18 @@ export function createAndroidPlatform(): Platform {
     haptic(kind) {
       void Haptics.impact({ style: impact[kind] }).catch(() => {});
     },
+    async copy(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return false;
+      }
+    },
     async share(payload) {
       try {
+        // Files need a native file URI (@capacitor/filesystem), which is not a dependency yet.
+        if (payload.file) return false;
         const opts: { text?: string; url?: string } = {};
         if (payload.text !== undefined) opts.text = payload.text;
         if (payload.url !== undefined) opts.url = payload.url;

@@ -341,10 +341,10 @@ Each of these gives a reason to come back without a backend and without grind.
 | Unlocks | New Cores and Mods unlock through specific feats ("win a match with 6 splits alive"). The Collection shows hints | 6 |
 | Ascension | Eight difficulty tiers, per Core | 4 |
 | Endless | Keep going after a winning run; best round is recorded per Core | 4 |
-| Daily Clash | One seeded run per UTC day with a fixed Core and fixed draft offers. One scored attempt. Result is a compact shareable text block | 6 |
-| Versus Lab | Unlocks after the first completed run. Pick any two builds from unlocked content and watch them fight, with speed and skip controls | 6 |
-| Replay codes | A compact code holding version, seed, both builds and the launch and ultimate inputs. Web builds accept it as a URL parameter | 6 |
-| Clip export | Record a match to video with `canvas.captureStream` and `MediaRecorder` where the browser supports it; feature-detect and hide the button otherwise. Android shares through the system sheet | 6 |
+| Daily Clash | One seeded run per UTC day with the Core of the day (all Cores in rotation) and every Mod in the pool, so offers are the same for everyone. The first finished run is the scored one; no Endless, no Ascension. Result is an emoji grid text block, shared or copied | 6 |
+| Versus Lab | Unlocks after the first completed run. Pick any two Cores and up to 6 Mods each (with levels) from unlocked content, set a seed, and watch them fight at 1x/2x/4x with a skip button | 6 |
+| Replay codes | A compact base64url code holding version, seed, both Cores and builds, twist and every launch and ultimate input of both sides. Web builds accept `?replay=CODE`; codes only play on the same major.minor version | 6 |
+| Clip export | Record a match to video with `canvas.captureStream` and `MediaRecorder` where the browser supports it; feature-detect and hide the button otherwise. Keeps roughly the last 8 to 16 s. Web shares or downloads a WebM; Android file sharing needs `@capacitor/filesystem` and is not built yet | 6 |
 | Lifetime stats | Records per Core: best margin, longest beam, most splits, fastest Wipeout | 6 |
 
 Do not add daily login rewards, energy, timers, loot boxes or streak penalties. A Daily Clash streak may be shown but never punished.
