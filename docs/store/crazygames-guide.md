@@ -73,7 +73,7 @@ Use a real phone, not only the browser's device mode. Use the same game build fr
 - [ ] Reload the page during a match. The game recovers to a sensible screen and does not show a blank page.
 - [ ] No console errors on load, or on the first match. Open the browser's developer tools (F12 on desktop) and check the Console tab.
 - [ ] No external links, no "download the app" buttons, no cross-promotion. Brief section 7.1 requires this for portal builds. Check the menus by tapping every button.
-- [ ] The privacy page is not linked from the game. It is only linked from the store listing. Portal builds must not contain external links (brief section 7.1). Note: `pages/privacy.html` is also copied into the portal zip, because Vite copies everything in `public/` into `dist/`. It is not linked, so this is harmless. Ask the portal if it objects to an extra file.
+- [ ] The privacy page is not linked from the game. It is only linked from the store listing. Portal builds must not contain external links (brief section 7.1). The privacy page lives in `pages/` and is added only to the GitHub Pages build, so the portal zip does not contain it.
 - [ ] Text is readable on a phone, with no tiny labels.
 
 ## 3. Build the portal zip
