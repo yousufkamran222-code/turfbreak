@@ -354,6 +354,8 @@ html, body, #app { height: 100dvh; }
   flex-direction: column;
   gap: 14px;
 }
+/* Children keep their natural height; the screen scrolls instead of squeezing (and clipping) cards. */
+.screen > * { flex-shrink: 0; }
 .screen h2 { margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.08em; text-align: center; }
 .screen h3 { margin: 0; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .center { text-align: center; }
