@@ -9,6 +9,11 @@ const RARITY_WEIGHT: Record<Rarity, (round: number) => number> = {
   rare: (r) => 1 + r,
 };
 
+/** Offer weight of a Mod of this rarity in this round (later rounds offer more rares). */
+export function rarityWeight(rarity: Rarity, round: number): number {
+  return RARITY_WEIGHT[rarity](round);
+}
+
 export const MAX_MODS = 6;
 export const MAX_LEVEL = 3;
 
