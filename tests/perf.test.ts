@@ -27,7 +27,7 @@ describe('performance', () => {
       recordEvents: true,
       twist: { extraPrimaries: [1, 1] },
     });
-    let worst = 0;
+    const times: number[] = [];
     let total = 0;
     while (w.phase !== 'ended') {
       const t0 = performance.now();
@@ -35,12 +35,14 @@ describe('performance', () => {
       const dt = performance.now() - t0;
       total += dt;
       // Ignore the first steps: JIT warm-up is not representative.
-      if (w.step > 120) worst = Math.max(worst, dt);
+      if (w.step > 120) times.push(dt);
     }
     const mean = total / w.step;
-    console.log(`perf: ${w.step} steps, mean ${mean.toFixed(3)} ms, worst ${worst.toFixed(3)} ms, runners ${w.runners.length}`);
+    // The 99th percentile, not the single worst step: one GC pause or a busy parallel test run is noise.
+    const p99 = [...times].sort((a, b) => a - b)[Math.floor(times.length * 0.99)]!;
+    console.log(`perf: ${w.step} steps, mean ${mean.toFixed(3)} ms, p99 ${p99.toFixed(3)} ms, runners ${w.runners.length}`);
     expect(w.runners.filter((r) => r.side === 0).length).toBeGreaterThan(10);
     expect(mean).toBeLessThan(0.5);
-    expect(worst).toBeLessThan(8);
+    expect(p99).toBeLessThan(2);
   });
 });

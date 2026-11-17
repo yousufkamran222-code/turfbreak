@@ -2,6 +2,21 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Stage D, CrazyGames adapter and ad rules
+
+- **`src/platform/crazygames.ts`** wraps the web adapter. Facts are from the v3 docs ([intro](https://docs.crazygames.com/sdk/intro/), [video ads](https://docs.crazygames.com/sdk/video-ads/)):
+  - It loads `https://sdk.crazygames.com/crazygames-sdk-v3.js` at run time and awaits `SDK.init()`.
+  - It does nothing when the environment is `disabled`. Outside CrazyGames every SDK call would throw, so the game then behaves exactly as the web build.
+  - It maps the loading and gameplay events, happytime and the data module (with a localStorage fallback).
+  - Rewarded and midgame ads go through `ad.requestAd`, which pauses and mutes the game via the existing pause/resume hooks and recovers on `adError`.
+  - `hasAdblock()` hides rewarded buttons.
+- **Bundles:** the SDK loader is a separate 1.5 KB chunk in the CrazyGames build only; the web build contains no SDK code.
+- **Run rules for rewarded placements (brief 7.2):**
+  - `revive` restores one heart, once per run, at zero hearts. A lost final round is played again.
+  - `adReroll` gives one extra reroll per draft.
+  - Neither is available in the Daily Clash, whose scored attempt must stay fair.
+- **Ad timing:** no ads in a player's first run, and the between-run midgame ad never shares a screen with the revive offer (the UI enforces both).
+
 ## 2026-11-17: Bloom buff
 
 - **Change:** Overgrowth now spreads the whole frontier twice, 0.6 s apart (was once).

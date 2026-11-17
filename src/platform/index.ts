@@ -10,9 +10,12 @@ export async function createPlatform(): Promise<Platform> {
     const { createAndroidPlatform } = await import('./android');
     return createAndroidPlatform();
   }
+  if (target === 'crazygames') {
+    const { createCrazyGamesPlatform } = await import('./crazygames');
+    return createCrazyGamesPlatform();
+  }
   const { createWebPlatform } = await import('./web');
-  // The CrazyGames SDK adapter arrives in Phase 7; until then it behaves as plain web.
-  return createWebPlatform(target === 'crazygames' ? 'crazygames' : 'web');
+  return createWebPlatform('web');
 }
 
 export type { Platform } from './types';

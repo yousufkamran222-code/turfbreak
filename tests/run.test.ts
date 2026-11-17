@@ -383,3 +383,35 @@ describe('unknown ids', () => {
     expect(run.offer).toEqual([mods[0]!.id]);
   });
 });
+
+describe('rewarded placements', () => {
+  it('revive restores one heart once per run, and never in the Daily', async () => {
+    const { canRevive, revive } = await import('../src/run/run');
+    const lose = { won: false, margin: 10, wipeout: false };
+    let run = startRun({ seed: 9, coreId: 'ricochet' });
+    while (run.phase !== 'summary') run = run.phase === 'draft' ? pickMod(run, null) : finishMatch(run, lose);
+    expect(run.outcome).toBe('lost');
+    expect(canRevive(run)).toBe(true);
+    const back = revive(run);
+    expect(back.hearts).toBe(1);
+    expect(back.phase).toBe('draft');
+    expect(back.round).toBe(run.round + 1);
+    let again = back;
+    while (again.phase !== 'summary') again = again.phase === 'draft' ? pickMod(again, null) : finishMatch(again, lose);
+    expect(canRevive(again)).toBe(false);
+    let daily = startRun({ seed: 9, coreId: 'ricochet', mode: 'daily' });
+    while (daily.phase !== 'summary') daily = daily.phase === 'draft' ? pickMod(daily, null) : finishMatch(daily, lose);
+    expect(canRevive(daily)).toBe(false);
+  });
+
+  it('ad reroll adds one reroll once per draft', async () => {
+    const { adReroll, canAdReroll } = await import('../src/run/run');
+    const run = startRun({ seed: 9, coreId: 'ricochet' });
+    const r1 = adReroll(run);
+    expect(r1.rerolls).toBe(run.rerolls + 1);
+    expect(canAdReroll(r1)).toBe(false);
+    expect(adReroll(r1)).toBe(r1);
+    const next = finishMatch(pickMod(r1, null), { won: true, margin: 5, wipeout: false });
+    expect(canAdReroll(next)).toBe(true);
+  });
+});
