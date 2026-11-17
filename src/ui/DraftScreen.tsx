@@ -12,6 +12,9 @@ interface Props {
   onReroll(): void;
   onReplace(modId: string, slot: number): void;
   onHome(): void;
+  /** Offer the rewarded reroll (the platform has ads, not the first run, not the Daily). */
+  adReroll?: boolean;
+  onAdReroll?(): void;
   /** The one-line hint under the buttons was already shown on an earlier draft. */
   hintSeen?: boolean;
   onHintSeen?(): void;
@@ -31,7 +34,7 @@ function lastResult(run: RunState): string | null {
 }
 
 /** Pick 1 of the offered Mods, reroll, skip, or (with a full build) choose which Mod to replace. */
-export function DraftScreen({ run, onPick, onReroll, onReplace, onHome, hintSeen = true, onHintSeen }: Props) {
+export function DraftScreen({ run, onPick, onReroll, onReplace, onHome, adReroll = false, onAdReroll, hintSeen = true, onHintSeen }: Props) {
   // Shown for the whole first draft (rerolls included), then never again.
   const [showHint] = useState(!hintSeen);
   useEffect(() => {
@@ -107,6 +110,13 @@ export function DraftScreen({ run, onPick, onReroll, onReplace, onHome, hintSeen
           Skip (+{rules.skipRerolls} reroll{rules.skipRerolls === 1 ? '' : 's'})
         </button>
       </div>
+      {adReroll && (
+        <div class="draft-actions ad">
+          <button type="button" class="secondary" id="ad-reroll" onClick={onAdReroll}>
+            ▶ Free reroll (ad)
+          </button>
+        </div>
+      )}
       {showHint && <p class="draft-hint">Reroll: new offers. Skip: take nothing, gain a reroll.</p>}
 
       <section class="build-panel" aria-label="Your build">

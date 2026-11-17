@@ -7,7 +7,8 @@ import { setHighContrast, setReduceMotion } from '../render/fx';
 import { dailyCoreId, dailySeed, utcDay } from '../content/daily';
 import { featFor, type Feat, type MatchSummary } from '../content/unlocks';
 import { applyMatch } from '../meta/progress';
-import { continueEndless, MAX_ASCENSION, pickMod, replaceMod, rerollOffer, startRun, type RunState } from '../run/run';
+import { adReroll, canAdReroll, canRevive, continueEndless, MAX_ASCENSION, pickMod, replaceMod, revive, rerollOffer, startRun, type RunState } from '../run/run';
+import { showAdReroll, showInterstitial, showRevive, withDevFakeAds } from './ads';
 import { defaultCoreStats, SAVE_KEY, serializeSave, type Save, type Settings } from '../meta/save';
 
 const PREFS_KEY = 'turfbreak.ui';
@@ -60,12 +61,14 @@ export class Game {
   readonly unlocked = signal<number | null>(null);
   /** Feats just met, for the "UNLOCKED" banner. Not saved. */
   readonly newFeats = signal<Feat[]>([]);
+  readonly platform: Platform;
 
   constructor(
-    readonly platform: Platform,
+    platform: Platform,
     readonly synth: Synth,
     initial: Save,
   ) {
+    this.platform = withDevFakeAds(platform);
     this.save.value = initial;
     this.applySettings();
   }
@@ -186,6 +189,77 @@ export class Game {
     if (done.ascension !== null) this.unlocked.value = done.ascension;
     this.newFeats.value = done.unlocked;
     this.commit(done.save);
+  }
+
+  /** Seed of the run whose between-run interstitial was already requested (at most one per run). */
+  private interstitialFor: number | null = null;
+  private adBusy = false;
+
+  /** Whether the draft offers the rewarded reroll right now. */
+  get adRerollVisible(): boolean {
+    const run = this.save.value.run;
+    return !!run && showAdReroll(this.platform, this.save.value, run);
+  }
+
+  /** Whether the summary offers the rewarded revive right now. */
+  get reviveVisible(): boolean {
+    const run = this.save.value.run;
+    return !!run && showRevive(this.platform, this.save.value, run);
+  }
+
+  /** Watch a rewarded ad for one extra reroll. Anything but 'rewarded' changes nothing and says nothing. */
+  async adReroll(): Promise<void> {
+    if (this.adBusy || !this.adRerollVisible) return;
+    this.adBusy = true;
+    try {
+      if ((await this.platform.showRewarded()) !== 'rewarded') return;
+      const run = this.save.value.run;
+      if (run && canAdReroll(run)) this.setRun(adReroll(run));
+    } finally {
+      this.adBusy = false;
+    }
+  }
+
+  /**
+   * Watch a rewarded ad to come back with one heart. Entering the summary had
+   * counted the run as completed; a revived run is still in progress, so that
+   * count is taken back and the run ends (and counts) again when it really ends.
+   */
+  async revive(): Promise<void> {
+    if (this.adBusy || !this.reviveVisible) return;
+    this.adBusy = true;
+    try {
+      if ((await this.platform.showRewarded()) !== 'rewarded') return;
+      const run = this.save.value.run;
+      if (!run || !canRevive(run)) return;
+      const s = this.save.value.stats;
+      const stats = run.endless ? s : { ...s, runsCompleted: Math.max(0, s.runsCompleted - 1) };
+      this.unlocked.value = null;
+      this.setRun(revive(run), stats);
+    } finally {
+      this.adBusy = false;
+    }
+  }
+
+  /**
+   * Leave a finished run's summary (Play again or Home): the between-run ad, if
+   * one is due, then `next`. The ad never shows when this visit offered a revive.
+   */
+  async leaveSummary(next: () => void): Promise<void> {
+    if (this.adBusy) return;
+    const run = this.save.value.run;
+    if (run && showInterstitial(this.save.value, run, this.reviveVisible, this.interstitialFor)) {
+      this.interstitialFor = run.seed;
+      this.adBusy = true;
+      try {
+        await this.platform.showInterstitial();
+      } catch {
+        // An ad failure never blocks the player.
+      } finally {
+        this.adBusy = false;
+      }
+    }
+    next();
   }
 
   endless(): void {

@@ -393,7 +393,7 @@ Rules for every target:
 
 ### 7.2 Monetisation plan
 
-Nothing here is built before Phase 7, but the design leaves room for it.
+Built in `src/ui/ads.ts` and `Game` (see DECISIONS, "Ad placements and CI smoke"). "First run" means `runsStarted <= 1`. The between-run ad plays when leaving a summary only after the second completed run, once per run.
 
 | Placement | Type | Where |
 | --- | --- | --- |
@@ -402,7 +402,7 @@ Nothing here is built before Phase 7, but the design leaves room for it.
 | Between runs | Interstitial or midgame | After the run summary, never between rounds |
 | Remove ads | One-time purchase, Android | Phase 8, optional |
 
-CrazyGames does not allow a midgame ad and a rewarded continue at the same break, so the revive offer and the between-run ad must never share a screen. Check the current CrazyGames ad requirements before implementing.
+CrazyGames does not allow a midgame ad and a rewarded continue at the same break, so the revive offer and the between-run ad must never share a screen. A revive takes back the run's "completed" count, so it is counted when the run really ends.
 
 ### 7.3 Store requirements to design for now
 
@@ -416,7 +416,7 @@ Four workflows. All use Node 22 with npm caching. Use concurrency groups so a ne
 
 | Workflow | Trigger | What it does |
 | --- | --- | --- |
-| `ci.yml` | Every push and pull request | `npm ci`, lint, typecheck, unit tests, determinism tests, a 200-match balance smoke test, web build, bundle-size check |
+| `ci.yml` | Every push and pull request | `npm ci`, lint, typecheck, unit tests, determinism tests, a 200-match balance smoke test, web build, bundle-size check, fast UI smoke (`tools/ui-smoke.mjs --fast`, one match, screenshots uploaded) |
 | `web.yml` | Push to `main`, manual | Builds the `web` target and deploys it to GitHub Pages. Builds the `crazygames` target, zips it, and uploads it as an artifact and to the rolling release |
 | `android.yml` | Push to `main`, manual | JDK 21 (Temurin), builds the `android` web target, `npx cap sync android`, `./gradlew assembleDebug` with Gradle caching, uploads the APK as an artifact and to the rolling release |
 | `release.yml` | Tag `v*` | Builds a signed release AAB and APK from secrets, plus the portal zip, and attaches all three to a GitHub Release |

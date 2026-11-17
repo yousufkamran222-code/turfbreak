@@ -16,12 +16,15 @@ interface Props {
   unlocked: number | null;
   /** The UTC day, for a Daily Clash run: the summary then shares the Daily result and offers no Endless. */
   dailyDay?: string | undefined;
+  /** Offer the rewarded revive (the platform has ads, not the first run, not the Daily). */
+  revive?: boolean;
+  onRevive?(): void;
   onAgain(): void;
   onEndless(): void;
   onHome(): void;
 }
 
-export function SummaryScreen({ run, platform, unlocked, dailyDay, onAgain, onEndless, onHome }: Props) {
+export function SummaryScreen({ run, platform, unlocked, dailyDay, revive = false, onRevive, onAgain, onEndless, onHome }: Props) {
   const [note, setNote] = useState<string | null>(null);
   useBack(() => {
     onHome();
@@ -109,13 +112,18 @@ export function SummaryScreen({ run, platform, unlocked, dailyDay, onAgain, onEn
       </section>
 
       <div class="stack-actions">
+        {revive && (
+          <button type="button" class="primary big" id="revive" onClick={onRevive}>
+            ▶ Revive: +1 heart (ad)
+          </button>
+        )}
         {won && !daily && (
           <button type="button" class="primary big" id="endless" onClick={onEndless}>
             Continue (Endless)
           </button>
         )}
         {!daily && (
-          <button type="button" class={won ? 'secondary big' : 'primary big'} id="again" onClick={onAgain}>
+          <button type="button" class={won || revive ? 'secondary big' : 'primary big'} id="again" onClick={onAgain}>
             Play again
           </button>
         )}

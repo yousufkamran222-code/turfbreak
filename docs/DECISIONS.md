@@ -2,6 +2,19 @@
 
 Every change to a decision in `MASTER_PROMPT.md`, newest first. Format: date, old decision, new decision, reason.
 
+## 2026-11-17: Ad placements and CI smoke
+
+- **Rules live in `src/ui/ads.ts`** (pure, unit-tested with a fake platform in `tests/ads.test.ts`); `Game` runs the flows.
+- **"First run"** means `stats.runsStarted <= 1`. The brief's "runsStarted > 1 or runsCompleted >= 1" would also match the summary of the first run itself (its loss is counted as completed), so the revive would show there. Quitting run 1 and starting run 2 lifts the restriction.
+- **Rewarded reroll** ("▶ Free reroll (ad)"): a secondary button under Reroll/Skip, shown when the platform has rewarded ads, not the first run and `canAdReroll`. Only 'rewarded' applies `adReroll`; dismissed or unavailable change nothing and show nothing.
+- **Revive** ("▶ Revive: +1 heart (ad)"): primary button above Play again on a lost summary (Play again turns secondary). On 'rewarded' it applies `revive` and the player lands in the draft.
+- **Stats on revive:** entering the summary had counted the run as completed (`runsCompleted`). Revive takes that one count back (not in Endless, which never counts), so the run counts once when it really ends. Match losses stay counted: those matches were lost.
+- **Between-run interstitial** on leaving the summary (Play again, Home or back), awaited, only when `runsCompleted >= 2` (never after the first completed run), when the same visit did not offer a revive, and once per run (keyed on the run seed). A revived run that is lost again gets it, since that visit has no revive offer. An ad error never blocks leaving.
+- **Pause during ads:** the pause overlay listens to `onPause` only while a match is mounted, and ads only play outside matches, so an ad's pause/resume is a no-op for the UI (verified in `MatchScreen`).
+- **Web and Android** report `canShowRewarded() === false`: no rewarded button appears there (tested). The interstitial calls `showInterstitial()`, which resolves at once on web.
+- **Dev-only preview:** `npm run dev` with `?fakeads` fakes rewarded ads (`withDevFakeAds`, gated on `import.meta.env.DEV`, absent from builds).
+- **CI UI smoke:** `node tools/ui-smoke.mjs --fast` plays one match (first launch, draft, VS card, aim, 2x speed with big clock slices), checks the next draft, Settings and Collection, and fails on any console error. About 10 s locally, so it runs as a normal CI step after the size check, with Chromium installed by `npx playwright install chromium --with-deps` and screenshots uploaded as `ui-smoke-screenshots`. `playwright` is now a pinned devDependency (1.65.1). The full smoke stays manual.
+
 ## 2026-11-17: Playtest round 1 fixes
 
 - **Stuck 2x match: not reproduced.** Playwright runs (2x toggled during aiming, 3 s into the match, 40 rapid toggles, and during the ultimate slow-motion) all counted the timer down and ended the match. One latent bug was real and fixed: when a hit-stop began part-way through a frame at 2x or 4x, the frame's remaining steps were consumed without running, and the stepper was reset during hit-stop, so sim time was lost. `FixedStepper.advance` now lets the callback return `false` to stop the frame without consuming the step, and the session no longer resets the stepper during hit-stop. Unit tests added. Most likely the original stall was the driver (a pulsing `transform` also made the ultimate button "unstable" for Playwright clicks, so the ready pulse now uses only shadow and brightness).

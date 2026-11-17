@@ -425,6 +425,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .rar.uncommon { color: var(--uncommon); }
 .rar.rare { color: var(--rare); }
 .draft-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.draft-actions.ad { grid-template-columns: 1fr; }
 .build-panel { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 12px; margin-top: auto; }
 .build-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; min-height: 30px; }
 .mod-icon {
