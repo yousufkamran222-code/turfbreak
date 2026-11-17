@@ -15,7 +15,8 @@ const rival = { kind: 'heuristic' as const, ...tuning.ai.rival };
 
 describe('content matrix', () => {
   it('every Mod at every level runs a full match with each Core, and its trigger fires', () => {
-    for (const m of mods) {
+    // The nine original Mods; tests/mods2.test.ts covers the rest.
+    for (const m of mods.slice(0, 9)) {
       for (const core of [ricochet, splitter]) {
         for (const level of [1, 2, 3]) {
           let fired = 0;
