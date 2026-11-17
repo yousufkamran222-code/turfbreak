@@ -11,3 +11,4 @@ coverage/
 
 # Agent worktrees
 .claude/worktrees/
+ui-smoke-shots/
