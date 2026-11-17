@@ -245,8 +245,8 @@ Google Play App Signing is the default for new apps (unverified in this session)
 3. Click **Create new release**.
 4. Click **Upload** and choose `turfbreak-v0.3.0.aab`.
 5. Wait for the upload to finish. Play reads the file and shows the version code and name.
-6. Under **Release name**, type a name such as `0.3.0`.
-7. Under **Release notes**, type a short summary in plain English, for example: "Closed test of the Gauntlet. Please play it on your phone once a day and tell us what felt slow or confusing."
+6. Under **Release name**, type the version from `package.json`, for example `0.5.0`.
+7. Under **Release notes**, type a short summary in plain English, for example: "Closed test. Please play a run on your phone once a day and tell us what felt slow, confusing or unfair."
 8. Click **Save**, then **Review release**, then **Start rollout to closed testing**.
 
 Google reviews the release before it reaches testers. This can take a few hours to a few days (unverified).

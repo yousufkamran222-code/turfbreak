@@ -37,7 +37,7 @@ These are not for Claude to decide. Each one blocks a step above.
 
 - [ ] **Title.** Choose one of the five in `listing.md` section 1, after a conflict check.
 - [ ] **Contact email** for the privacy page and the store listing. Use a dedicated address, since Play shows it publicly.
-- [ ] **Which build to ship first.** The current build is v0.3.0. It has the Gauntlet, two Cores and nine Mods, but not the full 10-match run in the brief (Phase 3). Phase 2's fun gate is not yet passed (`docs/PROGRESS.md`). Decide whether the first closed test is this build or a later one. The store copy describes the current build, so it must change if Phase 3 lands first.
+- [ ] **Which build to ship first.** The current build (v0.5 or later) has the full game in the brief: 8 Cores, 30 Mods, the 10-round run, Ascension, Endless, Daily Clash, Versus Lab and replay codes. What it lacks is your own play test: the fun gate was replaced by agent playtests (`docs/PROGRESS.md`). Play it before the first closed test.
 - [ ] **Testers.** Names and Gmail addresses for 12 to 15 people, ideally people who will play daily.
 - [ ] **Target audience.** The recommendation is 13 and over (`listing.md` section 8).
 

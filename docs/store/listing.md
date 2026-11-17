@@ -2,7 +2,7 @@
 
 Copy for Google Play and CrazyGames, plus the content-rating answers. Use this with `play-console-guide.md` and `crazygames-guide.md`.
 
-**Read first: the copy describes the build as it is now (v0.3.0).** That build has two Cores, nine Mods and the five-round Gauntlet. The full 10-match run in brief section 3.3 is Phase 3 and is not built. Phase 2's fun gate is also still open, so Yousuf should decide when the listing goes live. When Phase 3 ships, rewrite the descriptions to match.
+**Read first:** the copy describes v0.5: eight Cores, thirty Mods, the ten-round run with bosses, Ascension, Endless, Daily Clash, Versus Lab and replay codes. Yousuf has not yet confirmed the game is fun in his own play test, so he decides when the listing goes live.
 
 Character limits used here: Google Play title 30 characters, short description 80, full description 4,000. The CrazyGames description limit was not found on the official page, so the CrazyGames text is kept short on purpose.
 
@@ -40,34 +40,44 @@ Option 1 is the most direct. Option 3 is the most accurate about the one-touch p
 Paste the text between the two lines into the "Full description" field.
 
 ```text
-Turfbreak is a short territory game. Two coloured runners bounce around a map of cells and claim every cell they touch. A match lasts about 40 seconds and plays itself. Your choices decide which side you build.
+Turfbreak is a short territory roguelite. Two coloured runners bounce around a map of cells and claim every cell they touch. A match lasts about 40 seconds and plays itself. Your choices decide which side you build.
 
 HOW A MATCH WORKS
-- Before a match, drag to aim your launch. Your runner bounces off the walls and claims territory as it goes. If you wait, it launches on its own after 4 seconds.
+- Before a match, drag to aim your launch. Your runner bounces off the walls and claims territory as it goes. If you wait, it launches on its own.
 - Once per match, press the ultimate button to fire your Core's signature ability. Choosing the moment is up to you.
-- Pickups appear on the map for 10 seconds. Whoever grabs one gets a temporary boost.
-- The territory bar shows who leads. Mod chips flash when one of your upgrades fires.
+- Pickups appear on the map for a few seconds. Whoever grabs one gets a short boost.
+- The territory bar shows who leads. Mod icons flash when one of your upgrades fires.
 
-CHOOSE A CORE
-This version has two Cores:
-- Ricochet: a beam trails behind the runner. Its ultimate, Spin, sweeps the beam around the whole map.
-- Splitter: the runner splits into a swarm as it captures. Its ultimate, Burst, splits it again.
+PICK A CORE
+Eight Cores, each with its own way of taking ground and its own ultimate:
+- Ricochet trails a beam that sweeps as it swings.
+- Splitter spawns a growing swarm of smaller runners.
+- Pulse fires shockwaves that grow with every pulse.
+- Bloom spreads into the cells next to it.
+- Fortress shields its territory.
+- Phantom teleports behind enemy lines.
+- Juggernaut grows bigger and slower.
+- Leech hunts the enemy runner and drains its speed.
+You start with three. The rest unlock by playing.
 
-DRAFT MODS
-Before each match you can pick one of three Mods, or skip. Mods stack with your Core. Each has three levels. The nine Mods are Overclock, Growth Spurt, Chain Reaction, Afterburner, Shockwave, Bulwark, Magnet, Encore and Head Start.
+DRAFT A BUILD
+After every match, pick one of three Mods, reroll the offer, or skip. Thirty Mods, three levels each, up to six in a build. They stack with your Core and with each other, so a few picks can turn into a build that feels unfair.
 
-GAUNTLET
-A five-round run from the menu. Pick a Core, draft before each match, and face rivals with their own builds. A summary at the end shows how the run went.
+THE RUN
+Ten rounds, three hearts, bosses on rounds five and ten. Win the run to unlock harder Ascension tiers, or keep going in Endless.
 
-ABOUT THIS VERSION
+MORE MODES
+- Daily Clash: one seeded run a day, the same for everyone. Share your result.
+- Versus Lab: set up any two builds and watch them fight.
+- Replay codes: share a match as a short code and watch it again.
+
+ABOUT THIS GAME
 - No accounts, no sign-in and no tutorial screens. You learn by playing.
-- No ads and no purchases.
 - Your save stays on your device. Turfbreak collects no personal data.
-- Abstract shapes and colours only. No people, no blood, no gambling. The draft is a free choice. Nothing is bought or wagered.
-- This is an early version. More content is in development.
+- Abstract shapes and colours only. No people, no blood, no gambling. Nothing is bought or wagered.
 ```
 
-The text above is 1,711 characters, under the 4,000 limit. Google Play counts characters the same way, but re-check with any character counter after you edit it.
+The text above is about 2,000 characters, under the 4,000 limit. Google Play counts characters the same way, but re-check with any character counter after you edit it.
 
 ## 4. CrazyGames description and controls
 
@@ -76,13 +86,13 @@ The CrazyGames developer portal asks for a description and controls (official re
 **Description (about 300 characters):**
 
 ```text
-Turfbreak is a short territory game. Two coloured runners bounce around a map and claim every cell they touch. Aim the launch, fire your Core's ultimate once per match, and draft Mods between matches. Each match lasts about 40 seconds. Play the five-round Gauntlet from the menu.
+Turfbreak is a short territory roguelite. Two coloured runners bounce around a map and claim every cell they touch. Pick one of eight Cores, draft Mods between 40-second matches, aim your launch and fire your ultimate once per match. Ten rounds, three hearts, bosses, a Daily Clash and a Versus Lab.
 ```
 
 **Controls:**
 
 ```text
-Mouse: click and drag to aim the launch before a match. Click the ultimate button once per match. In the draft, click a Mod to take it, or click Skip.
+Mouse: click and drag to aim the launch before a match. Click the ultimate button once per match. In the draft, click a Mod to take it, Reroll for new offers, or Skip.
 Touch: drag to aim, tap the ultimate button, and tap a Mod to take it.
 Keyboard: Escape goes back.
 ```
