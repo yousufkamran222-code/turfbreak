@@ -8,7 +8,7 @@ import { ArenaRenderer, sidePalette, type Overlay } from '../render/renderer';
 import type { CoreDef, ModPick } from '../sim/abilities';
 import type { EndReason } from '../sim/events';
 import { APP_VERSION, type ReplayData } from '../meta/replay';
-import { needsTactical, tacticalDefault, canUltimate, primaryOf, queueInput, type ControllerSpec, type InputRecord } from '../sim/input';
+import { applyTactical, needsTactical, tacticalDefault, canUltimate, primaryOf, queueInput, type ControllerSpec, type InputRecord } from '../sim/input';
 import { stepWorld } from '../sim/step';
 import { createWorld, type MatchTwist, type Phase, type Ruleset, type TacticalChoice, type SideIndex, type World } from '../sim/world';
 import type { HapticKind } from '../platform/types';
@@ -257,9 +257,8 @@ export class MatchSession {
 
   chooseTactical(choice: TacticalChoice): void {
     if (this.paused || !needsTactical(this.world)) return;
-    this.world.pendingInputs.push({ step: this.world.step, side: 0, type: 'tactical', choice });
-    // The next frame resolves both choices and resumes the simulation.
-    this.hud.tactical.value = false;
+    // Lock the choice now; the next frame resolves both sides and resumes the simulation.
+    if (applyTactical(this.world, 0, choice)) this.hud.tactical.value = false;
   }
 
   private readonly frame = (now: number): void => {

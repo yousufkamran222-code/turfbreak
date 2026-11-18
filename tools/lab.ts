@@ -299,7 +299,7 @@ function inputValue(args: Args): string {
     'Side A uses the controller shown; side B is the rival heuristic. "None" never aims or fires its ultimate.',
     '',
     '| Pairing | None | Random | Heuristic | Heuristic vs none | Heuristic vs random |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| --- | --- | --- | --- | --- | --- |',
   ];
   for (const [a, b] of pairings(args)) {
     const rate = (c: ControlName): number => {

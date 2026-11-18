@@ -1,4 +1,5 @@
 import { ComparisonScreen } from './ComparisonScreen';
+import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { coreById } from '../content/cores';
 import { tuning } from '../content/tuning';
@@ -23,6 +24,8 @@ interface Props {
 function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
+
+const playtestEnabled = import.meta.env.DEV || import.meta.env.VITE_AGENCY_PLAYTEST === 'true';
 
 type Screen = 'comparison' | 'home' | 'run' | 'cores' | 'settings' | 'debug' | 'quick' | 'collection' | 'lab' | 'labmatch' | 'replay';
 
@@ -279,11 +282,12 @@ function Screens({ game }: Props) {
     );
   }
 
-  if (firstLaunch) return <div class="playtest-home">{(import.meta.env.DEV || import.meta.env.VITE_AGENCY_PLAYTEST === 'true') && <button type="button" class="secondary" id="agency-playtest" onClick={() => setScreen('comparison')}>Agency playtest</button>}<FirstScreen game={game} onRun={() => setScreen('run')} onSettings={() => setScreen('settings')} /></div>;
+  const playtestButton = playtestEnabled ? <button type="button" class="secondary" id="agency-playtest" onClick={() => setScreen('comparison')}>Agency playtest</button> : null;
+  const withPlaytest = (screenNode: ComponentChildren) => playtestEnabled ? <div class="playtest-home">{playtestButton}{screenNode}</div> : screenNode;
 
-  return (
-    <div class="playtest-home">
-    {(import.meta.env.DEV || import.meta.env.VITE_AGENCY_PLAYTEST === 'true') && <button type="button" class="secondary" id="agency-playtest" onClick={() => setScreen('comparison')}>Agency playtest</button>}
+  if (firstLaunch) return withPlaytest(<FirstScreen game={game} onRun={() => setScreen('run')} onSettings={() => setScreen('settings')} />);
+
+  return withPlaytest(
     <HomeScreen
       game={game}
       onRun={() => setScreen('run')}
@@ -298,7 +302,6 @@ function Screens({ game }: Props) {
         setScreen('run');
       }}
       onDailyResume={() => setScreen('run')}
-    />
-    </div>
+    />,
   );
 }
